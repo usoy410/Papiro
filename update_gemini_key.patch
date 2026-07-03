@@ -1,0 +1,40 @@
+--- app/src/main/java/com/usoy/papiro/ui/screens/SettingsScreen.kt
++++ app/src/main/java/com/usoy/papiro/ui/screens/SettingsScreen.kt
+@@ -983,6 +983,39 @@
+                                 Spacer(modifier = Modifier.height(16.dp))
+                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
++                                
++                                Spacer(modifier = Modifier.height(12.dp))
++                                Row(
++                                    verticalAlignment = Alignment.CenterVertically,
++                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
++                                ) {
++                                    Icon(
++                                        imageVector = Icons.Default.VpnKey,
++                                        contentDescription = "Key Icon",
++                                        tint = MaterialTheme.colorScheme.primary,
++                                        modifier = Modifier.size(20.dp)
++                                    )
++                                    Text(
++                                        text = "Gemini Document AI Key",
++                                        style = MaterialTheme.typography.titleSmall,
++                                        fontWeight = FontWeight.Bold,
++                                        color = MaterialTheme.colorScheme.onSurface
++                                    )
++                                }
++                                OutlinedTextField(
++                                    value = geminiApiKey,
++                                    onValueChange = { 
++                                        geminiApiKey = it
++                                        settingsStore.geminiApiKey = it
++                                    },
++                                    label = { Text("Gemini API Key (Optional Override)") },
++                                    modifier = Modifier.fillMaxWidth(),
++                                    singleLine = true,
++                                    placeholder = { Text("Uses default app key if blank") }
++                                )
++                                Spacer(modifier = Modifier.height(16.dp))
++                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
++
+                                 Spacer(modifier = Modifier.height(12.dp))
+                                 Row(

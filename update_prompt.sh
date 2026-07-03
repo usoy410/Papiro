@@ -1,0 +1,2 @@
+#!/bin/bash
+sed -i 's/Do NOT use ASCII art or mermaid or any other diagram formatting. Use ONLY the ```diagram block format with `\[Node\] -> \[Next Node\]` syntax./Use standard Mermaid syntax inside ```mermaid blocks. For example:\n           ```mermaid\n           graph TD;\n             A-->B;\n             A-->C;\n             B-->D;\n             C-->D;\n           ```/' app/src/main/java/com/usoy/papiro/data/GeminiService.kt

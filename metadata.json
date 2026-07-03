@@ -1,0 +1,6 @@
+{
+  "name": "Papiro",
+  "description": "A physical engineering-themed Markdown note-taking app with local OCR, free on-device AI generation, and interactive grid drawings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
