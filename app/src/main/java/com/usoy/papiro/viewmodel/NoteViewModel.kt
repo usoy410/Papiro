@@ -48,7 +48,16 @@ class NoteViewModel(
     val isOcrRunning: StateFlow<Boolean> = _isOcrRunning.asStateFlow()
 
     fun selectNote(note: NoteEntity?) {
-        _currentNote.value = note
+        if (note == null) {
+            _currentNote.value = null
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val fullNote = repository.getNoteById(note.id)
+            withContext(Dispatchers.Main) {
+                _currentNote.value = fullNote ?: note
+            }
+        }
     }
 
     fun createNewNote(onCreated: (NoteEntity) -> Unit = {}) {

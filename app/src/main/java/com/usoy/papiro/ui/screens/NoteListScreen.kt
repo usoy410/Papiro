@@ -233,7 +233,8 @@ fun NoteListScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(notes) { note ->
+                items(notes, key = { it.id }) { note ->
+                    val notePreview = remember(note.content) { getNotePreview(note.content) }
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -293,7 +294,7 @@ fun NoteListScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             
                             Text(
-                                text = getNotePreview(note.content),
+                                text = notePreview,
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
@@ -323,31 +324,43 @@ fun NoteListScreen(
 
 private fun getNotePreview(content: String): String {
     if (content.isEmpty()) return ""
-    var cleanText = content
-    if (cleanText.contains("```drawing")) {
-        try {
-            val builder = java.lang.StringBuilder()
-            var lastIndex = 0
-            while (true) {
-                val startIndex = cleanText.indexOf("```drawing", lastIndex)
-                if (startIndex == -1) {
-                    builder.append(cleanText.substring(lastIndex))
-                    break
-                }
-                builder.append(cleanText.substring(lastIndex, startIndex))
-                val endIndex = cleanText.indexOf("```", startIndex + 10)
-                if (endIndex == -1) {
-                    builder.append("[Drawing]")
-                    break
-                }
-                builder.append("[Drawing]")
-                lastIndex = endIndex + 3
+    
+    val builder = StringBuilder()
+    var lastIndex = 0
+    while (true) {
+        val startIndex = content.indexOf("```", lastIndex)
+        if (startIndex == -1) {
+            if (lastIndex < content.length) {
+                builder.append(content.substring(lastIndex))
             }
-            cleanText = builder.toString()
-        } catch (e: Exception) {
-            cleanText = cleanText.replace(Regex("```drawing[\\s\\S]*?```"), "[Drawing]")
+            break
         }
+        
+        // Append text before code block
+        builder.append(content.substring(lastIndex, startIndex))
+        
+        // Find end of line to see the block type
+        var nextNewline = content.indexOf('\n', startIndex + 3)
+        if (nextNewline == -1) nextNewline = content.length
+        
+        val type = content.substring(startIndex + 3, nextNewline).trim()
+        val displayType = if (type.isNotEmpty()) {
+            type.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
+        } else {
+            "Code"
+        }
+        
+        val endIndex = content.indexOf("```", nextNewline)
+        if (endIndex == -1) {
+            // Unclosed block (due to truncation)
+            builder.append("[$displayType]")
+            break
+        }
+        builder.append("[$displayType]")
+        lastIndex = endIndex + 3
     }
+    
+    var cleanText = builder.toString()
     
     // Normalize spaces and newlines
     cleanText = cleanText.replace(Regex("\\s+"), " ").trim()
