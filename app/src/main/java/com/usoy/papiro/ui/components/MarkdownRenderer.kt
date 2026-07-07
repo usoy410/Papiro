@@ -881,6 +881,13 @@ fun MarkdownRenderer(
                                         mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(block.text))
                                     }
                                     var isFocused by remember { mutableStateOf(false) }
+                                    val committedTexts = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+                                    
+                                    LaunchedEffect(isFocused) {
+                                        if (!isFocused) {
+                                            committedTexts.clear()
+                                        }
+                                    }
                                     
                                     LaunchedEffect(isFocused, textValue, blocks, index) {
                                         if (formatController != null) {
@@ -907,7 +914,19 @@ fun MarkdownRenderer(
                                     
                                     LaunchedEffect(block.text) {
                                         if (textValue.text != block.text) {
-                                            textValue = textValue.copy(text = block.text)
+                                            if (block.text in committedTexts) {
+                                                val idx = committedTexts.indexOf(block.text)
+                                                if (idx != -1) {
+                                                    for (k in 0..idx) {
+                                                        if (committedTexts.isNotEmpty()) {
+                                                            committedTexts.removeAt(0)
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                textValue = textValue.copy(text = block.text)
+                                                committedTexts.clear()
+                                            }
                                         }
                                     }
 
@@ -955,6 +974,10 @@ fun MarkdownRenderer(
                                             onValueChange = { newVal ->
                                                 val processedValue = handleBulletListTyping(textValue, newVal)
                                                 textValue = processedValue
+                                                committedTexts.add(processedValue.text)
+                                                if (committedTexts.size > 15) {
+                                                    committedTexts.removeAt(0)
+                                                }
                                                 if (formatController != null && isFocused) {
                                                     formatController.lastActiveBlockIndex = index
                                                     formatController.lastActiveBlockTextValue = processedValue
