@@ -380,7 +380,7 @@ object PromptTemplates {
             If Multiple Choice, the array is `const quizData = [ { question: "...", options: ["A", "B", "C", "D"], correct: 1, explanation: "..." } ];`
             If Flashcards, the array is `const deckData = [ { question: "...", answer: "...", explanation: "..." } ];`
             
-            Output ONLY the final merged HTML wrapped in ```quiz and ```. Do not add conversational text.
+            Output ONLY the final merged HTML wrapped in ```quiz and ```. Do NOT include ANY conversational filler, introductory text, or ending remarks.
         """.trimIndent()
     }
 
@@ -402,11 +402,11 @@ object PromptTemplates {
             ### 🤖 AI Tutor Response
             [Your answer]
             
-            Do NOT generate another quiz, table of contents, or conversational intros/outros. Simply output the enhanced question and the answer.
+            Do NOT generate another quiz, table of contents, or conversational intros/outros. Simply output the enhanced question and the answer with NO other text.
         """.trimIndent()
     }
     
     fun getSummaryPrompt(summaryType: String): String {
-        return "Read this document and create a $summaryType note out of it. Format with clear Markdown headings and bullet points. Do not include any conversational introductions or outros."
+        return "Read this document and create a $summaryType note out of it. Format with clear Markdown headings and bullet points. IMPORTANT: Output ONLY the summary note. Do NOT include ANY conversational filler, introductory text, or ending remarks."
     }
 }

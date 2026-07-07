@@ -23,7 +23,7 @@ import java.io.FileInputStream
 
 object GeminiService {
     private const val TAG = "GeminiService"
-    private const val MODEL_NAME = "gemini-2.5-flash"
+    private const val MODEL_NAME = "gemini-3.1-flash-lite"
     
     // Highly resilient timeouts for external APIs
     private val client = OkHttpClient.Builder()
@@ -42,9 +42,9 @@ object GeminiService {
         3. Fully structured sections with detailed bullet points corresponding to the Table of Contents.
         4. Detailed code blocks with syntax for technical topics, or mathematical formulas (using standard markdown LaTeX blocks if helpful).
         5. Visualizations:
-           - Use DIAGRAMS (standard Mermaid inside ```mermaid blocks) for structured flowcharts, sequence diagrams, process flows, state diagrams, timelines, organizational charts, or hierarchical trees.
+           - Use DIAGRAMS (standard Mermaid inside ```mermaid blocks) for structured flowcharts, sequence diagrams, process flows, state diagrams, timelines, organizational charts, or hierarchical trees. IMPORTANT: ALWAYS enclose node text with parenthesis or special characters inside double quotes (e.g., `A["Text (with parens)"]`) to prevent Mermaid parse errors.
            - Use DRAWINGS (drawing code blocks enclosing DrawingData JSON) for hand-drawn styled illustrations, creative line art, free-form geometric figures, labeled anatomical sketches, chemical molecules, or organic diagrams that cannot be expressed as standard text charts.
-        6. Keep it educational, engaging, and rich in depth. No conversational intro/outro, only the Markdown note.
+        6. Keep it educational, engaging, and rich in depth. CRITICAL: Output ONLY the Markdown note itself. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the note', 'Pro tip:', 'Let me know', etc.).
         7. CRITICAL MARKDOWN LIST FORMATTING: Never use asterisks (`*`) or plus signs (`+`) for markdown bullet lists/points. Always use a single hyphen followed by exactly one space.
         8. CUSTOM MARKDOWN TABLE STYLING AND COLORING: Whenever generating tables, you MUST utilize the app's advanced metadata comment tag in the VERY FIRST cell.
         9. ILLUSTRATION/LINE ART GENERATION (drawing CODE BLOCKS).
@@ -81,7 +81,7 @@ object GeminiService {
             return@withContext "Error: Gemini API Key is missing.\n\nPlease go to **Settings > Cloud Configuration** and enter your Google AI Studio Gemini API Key to use this feature."
         }
         
-        val model = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val model = "gemini-3.1-flash-lite"
 
         val promptContent = if (existingContent.trim().isEmpty()) {
             "Generate a note about: $topic"
@@ -148,7 +148,7 @@ object GeminiService {
             return@withContext "# TABLE OF CONTENTS\n\n- Error: Gemini API Key is missing. Please configure it in Settings."
         }
            
-        val model = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val model = "gemini-3.1-flash-lite"
         val systemInstruction = """
             You are a table of contents generator. 
             Analyze the provided markdown text and generate a structured table of contents.
@@ -182,7 +182,7 @@ object GeminiService {
             return@withContext "Error: Gemini API Key is missing. Please configure it in Settings."
         }
            
-        val model = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val model = "gemini-3.1-flash-lite"
 
         val request = GenerateContentRequest(
             contents = listOf(Content(parts = listOf(Part(text = prompt))))
@@ -209,11 +209,12 @@ object GeminiService {
             return@withContext "Error: Gemini API Key is missing. Please configure it in Settings to enhance notes."
         }
         
-        val model = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val model = "gemini-3.1-flash-lite"
 
          val systemInstruction = """
             You are an expert AI note assistant and enhancer.
             Your task is to analyze and enhance the note content.
+            IMPORTANT: Output ONLY the enhanced content. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the enhanced note', 'Pro tip:', 'Let me know', etc.).
         """.trimIndent()
 
         val request = GenerateContentRequest(
@@ -263,10 +264,10 @@ object GeminiService {
         if (apiKeyToUse.isEmpty()) {
             return@withContext "Error: Gemini API Key is missing for direct image extraction."
         }
-        val modelToUse = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val modelToUse = "gemini-3.1-flash-lite"
         
         val parts = mutableListOf<Part>()
-        parts.add(Part(text = "Extract all text and structural content (tables, headings, lists) from these images and format it as structured Markdown. Do not include conversational filler."))
+        parts.add(Part(text = "Extract all text and structural content (tables, headings, lists) from these images and format it as structured Markdown. IMPORTANT: Output ONLY the extracted text. Do NOT include ANY conversational filler, introductory text, or ending remarks."))
         
         for (base64Str in base64Images) {
             parts.add(Part(inlineData = InlineData(mimeType = "image/jpeg", data = base64Str)))
@@ -294,8 +295,8 @@ object GeminiService {
             return@withContext rawOcrText
         }
         
-        val prompt = "Format and clean up the following extracted text from an image. Make it readable, fix obvious OCR typos, and format it nicely using Markdown. IMPORTANT: Output ONLY the formatted text. Do NOT include any conversational filler, introductory text (like 'Here is the cleaned-up...'), or explanations of the changes made:\n\n$rawOcrText"
-        val modelToUse = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val prompt = "Format and clean up the following extracted text from an image. Make it readable, fix obvious OCR typos, and format it nicely using Markdown. IMPORTANT: Output ONLY the formatted text. Do NOT include ANY conversational filler, introductory text (like 'Here is the cleaned-up...'), ending remarks, or explanations of the changes made:\n\n$rawOcrText"
+        val modelToUse = "gemini-3.1-flash-lite"
         val request = GenerateContentRequest(
             contents = listOf(Content(parts = listOf(Part(text = prompt))))
         )
@@ -319,8 +320,8 @@ object GeminiService {
             return@withContext "Untitled Note"
         }
         
-        val prompt = "Generate a short, concise, and accurate title (maximum 6 words) for the following text. Respond ONLY with the title itself, no quotes, no formatting, and no conversational filler:\n\n${content.take(1500)}"
-        val modelToUse = settings.selectedCloudModel.trim().ifEmpty { "gemini-2.5-flash" }
+        val prompt = "Generate a short, concise, and accurate title (maximum 6 words) for the following text. Respond ONLY with the title itself, no quotes, no formatting, and no conversational filler, introductory text, or ending remarks:\n\n${content.take(1500)}"
+        val modelToUse = "gemini-3.1-flash-lite"
         val request = GenerateContentRequest(
             contents = listOf(Content(parts = listOf(Part(text = prompt))))
         )
@@ -345,7 +346,7 @@ object GeminiService {
                 contents = listOf(Content(parts = listOf(Part(text = "Hello"))))
             )
             val response = RetrofitClient.service.generateContent(
-                model = "gemini-2.5-flash",
+                model = "gemini-3.1-flash-lite",
                 apiKey = apiKey,
                 request = request
             )

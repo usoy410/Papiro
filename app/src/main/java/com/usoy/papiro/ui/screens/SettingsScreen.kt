@@ -492,42 +492,7 @@ fun SettingsScreen(
                             ) {
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                                Text(
-                                    text = "AI Coprocessor Provider",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    listOf(
-                                        SettingsStore.PROVIDER_GEMINI to "Google Gemini (Cloud AI Studio)"
-                                    ).forEach { (p, label) ->
-                                        val isSelected = provider == p
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    provider = p
-                                                    settingsStore.provider = p
-                                                }
-                                                .padding(vertical = 4.dp)
-                                        ) {
-                                            RadioButton(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    provider = p
-                                                    settingsStore.provider = p
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
-                                        }
-                                    }
-                                }
-
-                                Divider(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                Divider(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                                 Text(
                                     text = "Document Extraction (OCR) Strategy",
@@ -565,125 +530,66 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                if (provider == SettingsStore.PROVIDER_GEMINI) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            Text("Google Gemini Configuration", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                                            Text(
-                                                text = "Configure your Google AI Studio Gemini API key to enable high-quality cloud processing for note generation and document OCR.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            
-                                            OutlinedTextField(
-                                                value = geminiApiKey,
-                                                onValueChange = { 
-                                                    geminiApiKey = it
-                                                    settingsStore.geminiApiKey = it
-                                                },
-                                                label = { Text("Gemini API Key") },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                singleLine = true,
-                                                placeholder = { Text("Enter your Gemini API key") },
-                                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                            )
-                                            
-                                            var isTestingGemini by remember { mutableStateOf(false) }
-                                            var geminiTestMessage by remember { mutableStateOf("") }
-                                            Button(
-                                                onClick = {
-                                                    val keyToTest = geminiApiKey.trim().ifEmpty { com.usoy.papiro.BuildConfig.GEMINI_API_KEY }
-                                                    if (keyToTest.isEmpty()) {
-                                                        geminiTestMessage = "API Key cannot be empty."
-                                                        return@Button
-                                                    }
-                                                    scope.launch {
-                                                        isTestingGemini = true
-                                                        val (success, msg) = com.usoy.papiro.data.GeminiService.testApiKey(keyToTest)
-                                                        geminiTestMessage = msg
-                                                        isTestingGemini = false
-                                                    }
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                enabled = !isTestingGemini
-                                            ) {
-                                                if (isTestingGemini) {
-                                                    androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Verifying...")
-                                                } else {
-                                                    Text("Verify API Key")
-                                                }
-                                            }
-                                            if (geminiTestMessage.isNotEmpty()) {
-                                                Text(
-                                                    text = geminiTestMessage,
-                                                    color = if (geminiTestMessage.contains("successfully")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    modifier = Modifier.padding(top = 4.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else if (false) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        // Warning Card
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                Text(
-                                                    text = "⚠️ Advanced & Experimental On-Device AI",
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                                Text(
-                                                    text = "On-Device AI runs 100% offline, keeping your documents private on your device. To run models locally, you need a high-end mobile device (such as Google Pixel 8+, Samsung Galaxy S23+) with at least 8GB RAM, and 1.5 GB of free space. Execution speed depends completely on your hardware.",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
-                                                )
-                                            }
-                                        }
-
-                                        // Recommended download models
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("Google Gemini Configuration", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                                         Text(
-                                            text = "Download Recommended Models",
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(top = 4.dp)
+                                            text = "Configure your Google AI Studio Gemini API key to enable high-quality cloud processing for note generation and document OCR.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-
-                                        // Configuration section
+                                        
                                         OutlinedTextField(
-                                            value = localMaxTokens.toString(),
-                                            onValueChange = {
-                                                it.toIntOrNull()?.let { num ->
-                                                    
-                                                    
+                                            value = geminiApiKey,
+                                            onValueChange = { 
+                                                geminiApiKey = it
+                                                settingsStore.geminiApiKey = it
+                                            },
+                                            label = { Text("Gemini API Key") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true,
+                                            placeholder = { Text("Enter your Gemini API key") },
+                                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                        )
+                                        
+                                        var isTestingGemini by remember { mutableStateOf(false) }
+                                        var geminiTestMessage by remember { mutableStateOf("") }
+                                        Button(
+                                            onClick = {
+                                                val keyToTest = geminiApiKey.trim().ifEmpty { com.usoy.papiro.BuildConfig.GEMINI_API_KEY }
+                                                if (keyToTest.isEmpty()) {
+                                                    geminiTestMessage = "API Key cannot be empty."
+                                                    return@Button
+                                                }
+                                                scope.launch {
+                                                    isTestingGemini = true
+                                                    val (success, msg) = com.usoy.papiro.data.GeminiService.testApiKey(keyToTest)
+                                                    geminiTestMessage = msg
+                                                    isTestingGemini = false
                                                 }
                                             },
-                                            label = { Text("Max Tokens") },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-
-                                        Text(text = "Temperature: ${String.format("%.2f", localTemperature)}", style = MaterialTheme.typography.bodySmall)
-                                        Slider(
-                                            value = localTemperature,
-                                            onValueChange = {
-                                                
-                                                
-                                            },
-                                            valueRange = 0f..1.5f,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
+                                            modifier = Modifier.fillMaxWidth(),
+                                            enabled = !isTestingGemini
+                                        ) {
+                                            if (isTestingGemini) {
+                                                androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Verifying...")
+                                            } else {
+                                                Text("Verify API Key")
+                                            }
+                                        }
+                                        if (geminiTestMessage.isNotEmpty()) {
+                                            Text(
+                                                text = geminiTestMessage,
+                                                color = if (geminiTestMessage.contains("successfully")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }

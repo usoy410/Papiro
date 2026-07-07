@@ -37,8 +37,9 @@ fun MermaidRenderer(
 
     val theme = if (isDark) "dark" else "default"
     
+    val sanitizedCode = mermaidCode.replace("\r\n", "\n")
     val base64Code = android.util.Base64.encodeToString(
-        mermaidCode.toByteArray(Charsets.UTF_8),
+        sanitizedCode.toByteArray(Charsets.UTF_8),
         android.util.Base64.NO_WRAP
     )
 
@@ -84,7 +85,7 @@ fun MermaidRenderer(
           </div>
           
           <script type="module">
-            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
             mermaid.initialize({ startOnLoad: false, theme: '$theme' });
             
             function b64DecodeUnicode(str) {
@@ -98,8 +99,9 @@ fun MermaidRenderer(
                     const decoded = b64DecodeUnicode('$base64Code');
                     const el = document.querySelector('.mermaid');
                     if (el) {
-                        el.textContent = decoded;
-                        await mermaid.run({ nodes: [el] });
+                        const { svg, bindFunctions } = await mermaid.render('mermaid-svg', decoded);
+                        el.innerHTML = svg;
+                        if (bindFunctions) bindFunctions(el);
                     }
                 } catch (e) {
                     console.error("Mermaid error:", e);
@@ -144,7 +146,7 @@ fun MermaidRenderer(
           <div class="mermaid">Loading diagram...</div>
           
           <script type="module">
-            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
             mermaid.initialize({ startOnLoad: false, theme: '$theme' });
             
             function b64DecodeUnicode(str) {
@@ -158,8 +160,9 @@ fun MermaidRenderer(
                     const decoded = b64DecodeUnicode('$base64Code');
                     const el = document.querySelector('.mermaid');
                     if (el) {
-                        el.textContent = decoded;
-                        await mermaid.run({ nodes: [el] });
+                        const { svg, bindFunctions } = await mermaid.render('mermaid-svg', decoded);
+                        el.innerHTML = svg;
+                        if (bindFunctions) bindFunctions(el);
                         
                         const resizeObserver = new ResizeObserver(entries => {
                             for (let entry of entries) {

@@ -18,9 +18,9 @@ class SettingsStore(context: Context) {
 
     var selectedCloudModel: String
         get() {
-            val saved = prefs.getString(KEY_SELECTED_CLOUD_MODEL, "gemini-2.5-flash") ?: "gemini-2.5-flash"
+            val saved = prefs.getString(KEY_SELECTED_CLOUD_MODEL, "gemini-3.1-flash-lite") ?: "gemini-3.1-flash-lite"
             return if (saved.startsWith("gpt") || saved.startsWith("claude") || saved.contains("llama") || saved.contains("deepseek")) {
-                "gemini-2.5-flash"
+                "gemini-3.1-flash-lite"
             } else {
                 saved
             }
@@ -30,7 +30,7 @@ class SettingsStore(context: Context) {
     var cloudModels: List<String>
         get() {
             val saved = prefs.getString(KEY_CLOUD_MODELS, null)
-            val defaultList = listOf("gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite")
+            val defaultList = listOf("gemini-1.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite")
             if (saved == null) return defaultList
             val list = saved.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val filtered = list.filter { !it.startsWith("gpt") && !it.startsWith("claude") && !it.contains("llama") && !it.contains("deepseek") }

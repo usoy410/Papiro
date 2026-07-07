@@ -22,6 +22,11 @@ android {
     versionName = "2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    
+    // Optimize APK size by excluding 32-bit architectures
+    ndk {
+      abiFilters += listOf("arm64-v8a", "x86_64")
+    }
   }
 
   signingConfigs {
