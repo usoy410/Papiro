@@ -1019,11 +1019,17 @@ fun DrawingBlockView(
                     .size(drawingData.width.dp, drawingData.height.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                    .graphicsLayer { alpha = 0.99f }
                     .clickable { onEditClick(drawingData) }
             ) {
                 drawingData.paths.forEach { drawP ->
                     var pathColor = Color(drawP.color)
-                    if (isDarkTheme) {
+                    var blendMode = androidx.compose.ui.graphics.BlendMode.SrcOver
+                    
+                    if (drawP.isEraser) {
+                        pathColor = Color.Transparent
+                        blendMode = androidx.compose.ui.graphics.BlendMode.Clear
+                    } else if (isDarkTheme) {
                         if (drawP.color == android.graphics.Color.BLACK || drawP.color == android.graphics.Color.parseColor("#121212")) {
                             pathColor = themeOnBgColor
                         }
@@ -1040,13 +1046,14 @@ fun DrawingBlockView(
                                 lineTo(drawP.points[i].x * density, drawP.points[i].y * density)
                             }
                         }
-                        drawPath(p, pathColor, style = Stroke(drawP.strokeWidth * density, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                        drawPath(p, pathColor, style = Stroke(drawP.strokeWidth * density, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round), blendMode = blendMode)
                     } else if (drawP.points.size == 1) {
                         val pt = drawP.points.first()
                         drawCircle(
                             color = pathColor,
                             radius = (drawP.strokeWidth * density) / 2f,
-                            center = androidx.compose.ui.geometry.Offset(pt.x * density, pt.y * density)
+                            center = androidx.compose.ui.geometry.Offset(pt.x * density, pt.y * density),
+                            blendMode = blendMode
                         )
                     }
                 }

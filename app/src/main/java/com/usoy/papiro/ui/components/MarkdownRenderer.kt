@@ -1196,11 +1196,17 @@ fun MarkdownRenderer(
                                                         modifier = Modifier
                                                             .width(drawingData.width.dp)
                                                             .height(drawingData.height.dp)
+                                                            .graphicsLayer { alpha = 0.99f }
                                                     ) {
                                                         val d = density
                                                         for (path in drawingData.paths) {
                                                             var pathColor = Color(path.color)
-                                                            if (isDarkTheme) {
+                                                            var blendMode = androidx.compose.ui.graphics.BlendMode.SrcOver
+                                                            
+                                                            if (path.isEraser) {
+                                                                pathColor = Color.Transparent
+                                                                blendMode = androidx.compose.ui.graphics.BlendMode.Clear
+                                                            } else if (isDarkTheme) {
                                                                 if (path.color == android.graphics.Color.BLACK || path.color == android.graphics.Color.parseColor("#121212")) {
                                                                     pathColor = themeOnBgColor
                                                                 }
@@ -1226,14 +1232,16 @@ fun MarkdownRenderer(
                                                                         width = path.strokeWidth * d,
                                                                         cap = androidx.compose.ui.graphics.StrokeCap.Round,
                                                                         join = androidx.compose.ui.graphics.StrokeJoin.Round
-                                                                    )
+                                                                    ),
+                                                                    blendMode = blendMode
                                                                 )
                                                             } else if (path.points.size == 1) {
                                                                 val pt = path.points.first()
                                                                 drawCircle(
                                                                     color = pathColor,
                                                                     radius = (path.strokeWidth * d) / 2f,
-                                                                    center = Offset(pt.x * d, pt.y * d)
+                                                                    center = Offset(pt.x * d, pt.y * d),
+                                                                    blendMode = blendMode
                                                                 )
                                                             }
                                                         }
