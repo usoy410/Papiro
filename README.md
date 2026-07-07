@@ -1,21 +1,14 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Papiro v1.0 - Initial Release
 
-# Run and deploy your AI Studio app
+Welcome to the first release of Papiro, your AI-powered engineering and computer science notebook!
 
-This contains everything you need to run your app locally.
+## 🚀 Key Features
 
-View your app in AI Studio: https://ai.studio/apps/1fb777cf-4612-4df9-8e12-5ef95add804c
-
-## Run Locally
-
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
-
-
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+* **Rich Markdown Editor**: Write and format your notes with full Markdown support, including headings, lists, bold/italic text, and code blocks.
+* **AI Note Generation**: Instantly generate highly structured, conceptual overviews and engineering notes just by typing a topic.
+* **AI Note Enhancement**: Use the AI Coprocessor to fix typos, improve clarity, complete code snippets, and fix Mermaid diagram syntax in your existing notes.
+* **Auto Table of Contents**: Automatically generate a structured table of contents based on the headings in your note.
+* **Whiteboard OCR**: Snap a picture of a whiteboard or textbook, and the AI will extract the text and format it into your note.
+* **Google Gemini Integration**: Uses Google Gemini (Gemini 3.1 Flash Lite) for highly capable and fast AI processing, generation, and OCR via your Gemini API key.
+* **Visual Customization**: Personalize your notebook with different themes (Indigo, Cosmic, Matcha, Sakura) and paper styles (Grid, Ruled, Dotted, Plain).
+* **Offline-First Storage**: All your notes are saved securely on your device using a local Room database.

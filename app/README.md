@@ -41,7 +41,6 @@ To enable the AI capabilities (Note Generation, AI Refine, Quiz Generator, Gemin
 1. Obtain a **Google Gemini API Key** from [Google AI Studio](https://aistudio.google.com/).
 2. Open the **Settings** screen inside the Papiro app.
 3. Paste your API Key under the **AI Coprocessor Settings** section.
-4. (Optional) You can change the chosen Gemini Model (e.g., `gemini-3.1-flash-lite`) from the Settings page.
 
 ## Tech Stack
 - **Language:** Kotlin

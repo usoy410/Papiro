@@ -9,9 +9,6 @@ Welcome to the first release of Papiro, your AI-powered engineering and computer
 * **AI Note Enhancement**: Use the AI Coprocessor to fix typos, improve clarity, complete code snippets, and fix Mermaid diagram syntax in your existing notes.
 * **Auto Table of Contents**: Automatically generate a structured table of contents based on the headings in your note.
 * **Whiteboard OCR**: Snap a picture of a whiteboard or textbook, and the AI will extract the text and format it into your note.
-* **Flexible AI Providers**: Choose the AI engine that works best for you:
-  * **Custom APIs**: Connect to any OpenAI-compatible endpoint (e.g., OpenRouter).
-  * **Local Ollama via Termux**: Run models entirely offline on your device for ultimate privacy.
-  * **Local On-Device Models**: Load and run compiled `.task` models directly on your phone.
+* **Google Gemini Integration**: Uses Google Gemini (Gemini 3.1 Flash Lite) for highly capable and fast AI processing, generation, and OCR via your Gemini API key.
 * **Visual Customization**: Personalize your notebook with different themes (Indigo, Cosmic, Matcha, Sakura) and paper styles (Grid, Ruled, Dotted, Plain).
-* **Offline-First**: All your notes are saved securely on your device using a local Room database.
+* **Offline-First Storage**: All your notes are saved securely on your device using a local Room database.

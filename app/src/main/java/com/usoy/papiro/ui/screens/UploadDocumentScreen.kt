@@ -49,15 +49,6 @@ fun UploadDocumentScreen(
     var difficultyLevel by remember { mutableStateOf("Medium") }
     var numberOfItems by remember { mutableStateOf("5") }
     
-    val models = listOf(
-        "gemini-1.5-flash" to "Gemini 1.5 Flash (Ultra-fast, low cost)",
-        "gemini-2.5-flash" to "Gemini 2.5 Flash (Improved reasoning, best balance)",
-        "gemini-3.1-flash-lite" to "Gemini 3.1 Flash Lite (Cheapest, high speed)"
-    )
-    
-    var selectedModel by remember { mutableStateOf("gemini-2.5-flash") }
-    var expandedModelMenu by remember { mutableStateOf(false) }
-    
     var summaryType by remember { mutableStateOf("Concise") }
     val summaryOptions = listOf("Concise", "Detailed", "Preserve Content")
     
@@ -123,34 +114,6 @@ fun UploadDocumentScreen(
                 }
             }
 
-            Text("Select AI Model", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            ExposedDropdownMenuBox(
-                expanded = expandedModelMenu,
-                onExpandedChange = { expandedModelMenu = !expandedModelMenu }
-            ) {
-                OutlinedTextField(
-                    value = models.find { it.first == selectedModel }?.second ?: selectedModel,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModelMenu) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = expandedModelMenu,
-                    onDismissRequest = { expandedModelMenu = false }
-                ) {
-                    models.forEach { (modelId, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                selectedModel = modelId
-                                expandedModelMenu = false
-                            }
-                        )
-                    }
-                }
-            }
-            
             Text("Generation Mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
@@ -353,7 +316,7 @@ fun UploadDocumentScreen(
                                         }
                                         
                                         val response = RetrofitClient.service.generateContent(
-                                            model = selectedModel,
+                                            model = "gemini-3.1-flash-lite",
                                             apiKey = apiKeyToUse,
                                             request = request
                                         )
