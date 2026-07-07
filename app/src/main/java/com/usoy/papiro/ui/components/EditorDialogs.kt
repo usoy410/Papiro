@@ -255,14 +255,16 @@ fun MarkdownHelpDialog(
         }
     )
 }
+
 @Composable
 fun VersionHistoryDialog(
     showHistoryDialog: Boolean,
-    snapshots: List<com.usoy.papiro.ui.components.EditorMemento>,
+    snapshots: List<com.usoy.papiro.data.NoteHistoryEntity>,
     onDismiss: () -> Unit,
-    onRestore: (androidx.compose.ui.text.input.TextFieldValue) -> Unit
+    onRestore: (String) -> Unit
 ) {
     if (!showHistoryDialog) return
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -283,7 +285,9 @@ fun VersionHistoryDialog(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
                 ) {
                     items(snapshots.size) { index ->
-                        val snapshot = snapshots[snapshots.size - 1 - index]
+                        val snapshot = snapshots[index]
+                        val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy HH:mm", java.util.Locale.getDefault())
+                        val dateStr = dateFormat.format(java.util.Date(snapshot.timestamp))
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -295,20 +299,20 @@ fun VersionHistoryDialog(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Version ${snapshots.size - index}",
+                                        text = dateStr,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "${snapshot.state.text.length} characters",
+                                        text = "${snapshot.content.length} characters",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Button(
                                     onClick = {
-                                        onRestore(snapshot.state)
+                                        onRestore(snapshot.content)
                                         onDismiss()
                                     },
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),

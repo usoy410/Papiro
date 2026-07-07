@@ -932,9 +932,10 @@ fun NoteEditorScreen(
 
     com.usoy.papiro.ui.components.VersionHistoryDialog(
         showHistoryDialog = showHistoryDialog,
-        snapshots = undoRedoManager.snapshots,
+        snapshots = historySnapshots,
         onDismiss = { showHistoryDialog = false },
-        onRestore = { restoredContent ->
+        onRestore = { restoredString ->
+            val restoredContent = TextFieldValue(text = restoredString, selection = androidx.compose.ui.text.TextRange(restoredString.length))
             contentValue = restoredContent
             undoRedoManager.recordExplicitSnapshot(restoredContent)
         }

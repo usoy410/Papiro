@@ -77,6 +77,16 @@ class NoteViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val updated = current.copy(title = title, content = content, backgroundType = backgroundType, timestamp = System.currentTimeMillis())
             repository.insert(updated)
+            // Save to version history on manual save
+            if (content.trim().isNotEmpty()) {
+                repository.insertHistory(
+                    com.usoy.papiro.data.NoteHistoryEntity(
+                        noteId = current.id,
+                        content = content,
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            }
             withContext(Dispatchers.Main) {
                 _currentNote.value = updated
             }
