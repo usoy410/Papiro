@@ -556,15 +556,24 @@ class InsertTableCommand(
         val currentText = currentState.text
         val start = kotlin.math.min(currentState.selection.start, currentState.selection.end)
         val end = kotlin.math.max(currentState.selection.start, currentState.selection.end)
-        val newText = if (start != end) {
-            currentText.replaceRange(start, end, tableMarkdown)
+        if (start != end) {
+            val actualInsert = "\n" + tableMarkdown + "\n"
+            val newText = currentText.replaceRange(start, end, actualInsert)
+            return TextFieldValue(
+                text = newText,
+                selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+            )
         } else {
-            currentText.substring(0, start) + tableMarkdown + currentText.substring(start)
+            val insert = "\n" + tableMarkdown + "\n"
+            val before = currentText.substring(0, start)
+            val after = currentText.substring(start)
+            val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+            val newText = before + actualInsert + after
+            return TextFieldValue(
+                text = newText,
+                selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+            )
         }
-        return TextFieldValue(
-            text = newText,
-            selection = androidx.compose.ui.text.TextRange(start + tableMarkdown.length)
-        )
     }
 }
 
@@ -922,56 +931,74 @@ fun applyFormatting(
             applyBlockFormat(currentText, selection, formatType)
         }
         "MATH" -> {
+            val insert = "\n\n$$\nE_m = \\frac{RT}{F} \\ln \\left( \\frac{P_{K}[K^+]_{out} + P_{Na}[Na^+]_{out} + P_{Cl}[Cl^-]_{in}}{P_{K}[K^+]_{in} + P_{Na}[Na^+]_{in} + P_{Cl}[Cl^-]_{out}} \\right)\n$$\n\n"
             if (start != end) {
                 val selectedText = currentText.substring(start, end)
-                val wrapped = "\n$$\n$selectedText\n$$\n"
-                val newText = currentText.replaceRange(start, end, wrapped)
+                val wrapped = "\n\n$$\n$selectedText\n$$\n\n"
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(end)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) wrapped.substring(1) else wrapped
+                val newText = before + actualInsert + after
                 TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + wrapped.length)
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
                 )
             } else {
-                val insert = "\n$$\nE_m = \\frac{RT}{F} \\ln \\left( \\frac{P_{K}[K^+]_{out} + P_{Na}[Na^+]_{out} + P_{Cl}[Cl^-]_{in}}{P_{K}[K^+]_{in} + P_{Na}[Na^+]_{in} + P_{Cl}[Cl^-]_{out}} \\right)\n$$\n"
-                val newText = currentText.substring(0, start) + insert + currentText.substring(start)
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(start)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+                val newText = before + actualInsert + after
                 TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 4, start + insert.length - 4)
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
                 )
             }
         }
         "CODE_BLOCK" -> {
+            val insert = "\n\n```kotlin\n\n```\n\n"
             if (start != end) {
                 val selectedText = currentText.substring(start, end)
-                val wrapped = "\n```kotlin\n$selectedText\n```\n"
-                val newText = currentText.replaceRange(start, end, wrapped)
+                val wrapped = "\n\n```kotlin\n$selectedText\n```\n\n"
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(end)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) wrapped.substring(1) else wrapped
+                val newText = before + actualInsert + after
                 TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + wrapped.length)
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
                 )
             } else {
-                val insert = "\n```kotlin\n\n```\n"
-                val newText = currentText.substring(0, start) + insert + currentText.substring(start)
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(start)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+                val newText = before + actualInsert + after
                 TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 11)
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length - 6) // Put cursor inside
                 )
             }
         }
         "DIAGRAM" -> {
+            val insert = "\n\n```mermaid\ngraph TD;\n  A-->B;\n```\n\n"
             if (start != end) {
                 val selectedText = currentText.substring(start, end)
-                val wrapped = "\n```mermaid\n$selectedText\n```\n"
-                val newText = currentText.replaceRange(start, end, wrapped)
+                val wrapped = "\n\n```mermaid\n$selectedText\n```\n\n"
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(end)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) wrapped.substring(1) else wrapped
+                val newText = before + actualInsert + after
                 TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + wrapped.length)
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
                 )
             } else {
-                val insert = "\n```mermaid\ngraph TD;\n  A-->B;\n```\n"
-                val newText = currentText.substring(0, start) + insert + currentText.substring(start)
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(start)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+                val newText = before + actualInsert + after
                 TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 12)
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
                 )
             }
         }

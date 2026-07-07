@@ -393,16 +393,48 @@ fun NoteEditorScreen(
 
                     FormattingToolbar(
                         onFormatAction = { action ->
-                            if (action == "TABLE") {
-                                showTableConfigDialog = true
-                            } else {
-                                val localAction = formatController.onFormatAction
-                                if (localAction != null) {
-                                    localAction(action)
-                                } else {
-                                    val command = com.usoy.papiro.ui.components.FormatCommand(action)
-                                    undoRedoManager.executeCommand(command)
-                                    contentValue = undoRedoManager.currentState
+                            when (action) {
+                                "TABLE" -> {
+                                    showTableConfigDialog = true
+                                }
+                                "MATH" -> {
+                                    val newMath = com.usoy.papiro.ui.components.MarkdownBlock.MathBlock(
+                                        "E_m = \\frac{RT}{F} \\ln \\left( \\frac{P_{K}[K^+]_{out} + P_{Na}[Na^+]_{out} + P_{Cl}[Cl^-]_{in}}{P_{K}[K^+]_{in} + P_{Na}[Na^+]_{in} + P_{Cl}[Cl^-]_{out}} \\right)"
+                                    )
+                                    val updatedText = com.usoy.papiro.ui.components.insertMarkdownBlock(contentValue.text, newMath, formatController)
+                                    val newValue = TextFieldValue(text = updatedText, selection = androidx.compose.ui.text.TextRange(updatedText.length))
+                                    contentValue = newValue
+                                    undoRedoManager.recordExplicitSnapshot(newValue)
+                                }
+                                "CODE_BLOCK" -> {
+                                    val newCode = com.usoy.papiro.ui.components.MarkdownBlock.CodeBlock(
+                                        language = "kotlin",
+                                        code = ""
+                                    )
+                                    val updatedText = com.usoy.papiro.ui.components.insertMarkdownBlock(contentValue.text, newCode, formatController)
+                                    val newValue = TextFieldValue(text = updatedText, selection = androidx.compose.ui.text.TextRange(updatedText.length))
+                                    contentValue = newValue
+                                    undoRedoManager.recordExplicitSnapshot(newValue)
+                                }
+                                "DIAGRAM" -> {
+                                    val newDiagram = com.usoy.papiro.ui.components.MarkdownBlock.DiagramBlock(
+                                        title = "mermaid",
+                                        syntax = "graph TD;\n  A-->B;"
+                                    )
+                                    val updatedText = com.usoy.papiro.ui.components.insertMarkdownBlock(contentValue.text, newDiagram, formatController)
+                                    val newValue = TextFieldValue(text = updatedText, selection = androidx.compose.ui.text.TextRange(updatedText.length))
+                                    contentValue = newValue
+                                    undoRedoManager.recordExplicitSnapshot(newValue)
+                                }
+                                else -> {
+                                    val localAction = formatController.onFormatAction
+                                    if (localAction != null) {
+                                        localAction(action)
+                                    } else {
+                                        val command = com.usoy.papiro.ui.components.FormatCommand(action)
+                                        undoRedoManager.executeCommand(command)
+                                        contentValue = undoRedoManager.currentState
+                                    }
                                 }
                             }
                         },
@@ -917,9 +949,13 @@ fun NoteEditorScreen(
             onConfirm = { rows, cols, style, color ->
                 showTableConfigDialog = false
                 val tableMarkdown = com.usoy.papiro.ui.components.generateMarkdownTable(rows, cols, style, color)
-                val command = com.usoy.papiro.ui.components.InsertTableCommand(tableMarkdown)
-                undoRedoManager.executeCommand(command)
-                contentValue = undoRedoManager.currentState
+                val parsedTable = com.usoy.papiro.ui.components.parseMarkdown(tableMarkdown).firstOrNull { it is com.usoy.papiro.ui.components.MarkdownBlock.TableBlock }
+                if (parsedTable != null) {
+                    val updatedText = com.usoy.papiro.ui.components.insertMarkdownBlock(contentValue.text, parsedTable, formatController)
+                    val newValue = TextFieldValue(text = updatedText, selection = androidx.compose.ui.text.TextRange(updatedText.length))
+                    contentValue = newValue
+                    undoRedoManager.recordExplicitSnapshot(newValue)
+                }
             }
         )
     }

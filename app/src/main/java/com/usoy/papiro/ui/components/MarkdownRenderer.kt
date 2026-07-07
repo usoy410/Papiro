@@ -174,12 +174,26 @@ fun EditableBlockContainer(
     onEnhance: (() -> Unit)? = null,
     showControls: Boolean,
     modifier: Modifier = Modifier,
+    formatController: MarkdownFormatController? = null,
     content: @Composable () -> Unit
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            .pointerInput(index) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        if (event.type == androidx.compose.ui.input.pointer.PointerEventType.Press) {
+                            if (formatController != null) {
+                                formatController.lastActiveBlockIndex = index
+                                formatController.lastActiveBlockTextValue = null
+                            }
+                        }
+                    }
+                }
+            }
     ) {
         if (showControls) {
             Row(
@@ -305,6 +319,9 @@ fun EditableBlockContainer(
 
 class MarkdownFormatController {
     var onFormatAction: ((String) -> Unit)? = null
+    var activeBlockIndex: Int? = null
+    var lastActiveBlockIndex: Int? = null
+    var lastActiveBlockTextValue: androidx.compose.ui.text.input.TextFieldValue? = null
 }
 
 fun applyFormattingToLocal(
@@ -530,12 +547,76 @@ fun applyFormattingToLocal(
             }
         }
         "MATH" -> {
-            val insert = "\n$$\nE = mc^2\n$$\n"
-            val newText = currentText + insert
-            androidx.compose.ui.text.input.TextFieldValue(
-                text = newText,
-                selection = androidx.compose.ui.text.TextRange(newText.length)
-            )
+            val insert = "\n\n$$\nE_m = \\frac{RT}{F} \\ln \\left( \\frac{P_{K}[K^+]_{out} + P_{Na}[Na^+]_{out} + P_{Cl}[Cl^-]_{in}}{P_{K}[K^+]_{in} + P_{Na}[Na^+]_{in} + P_{Cl}[Cl^-]_{out}} \\right)\n$$\n\n"
+            if (start != end) {
+                val selectedText = currentText.substring(start, end)
+                val wrapped = "\n\n$$\n$selectedText\n$$\n\n"
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(end)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) wrapped.substring(1) else wrapped
+                val newText = before + actualInsert + after
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = newText,
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+                )
+            } else {
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(start)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+                val newText = before + actualInsert + after
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = newText,
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+                )
+            }
+        }
+        "CODE_BLOCK" -> {
+            val insert = "\n\n```kotlin\n\n```\n\n"
+            if (start != end) {
+                val selectedText = currentText.substring(start, end)
+                val wrapped = "\n\n```kotlin\n$selectedText\n```\n\n"
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(end)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) wrapped.substring(1) else wrapped
+                val newText = before + actualInsert + after
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = newText,
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+                )
+            } else {
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(start)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+                val newText = before + actualInsert + after
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = newText,
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length - 6) // Put cursor inside
+                )
+            }
+        }
+        "DIAGRAM" -> {
+            val insert = "\n\n```mermaid\ngraph TD;\n  A-->B;\n```\n\n"
+            if (start != end) {
+                val selectedText = currentText.substring(start, end)
+                val wrapped = "\n\n```mermaid\n$selectedText\n```\n\n"
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(end)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) wrapped.substring(1) else wrapped
+                val newText = before + actualInsert + after
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = newText,
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+                )
+            } else {
+                val before = currentText.substring(0, start)
+                val after = currentText.substring(start)
+                val actualInsert = if (before.endsWith("\n") || before.isEmpty()) insert.substring(1) else insert
+                val newText = before + actualInsert + after
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = newText,
+                    selection = androidx.compose.ui.text.TextRange(start + actualInsert.length)
+                )
+            }
         }
         "TABLE" -> {
             if (start != end) {
@@ -802,14 +883,24 @@ fun MarkdownRenderer(
                                     var isFocused by remember { mutableStateOf(false) }
                                     
                                     LaunchedEffect(isFocused, textValue, blocks, index) {
-                                        if (isFocused && formatController != null) {
-                                            formatController.onFormatAction = { action ->
-                                                val command = com.usoy.papiro.ui.components.LocalFormatCommand(action)
-                                                val updated = command.execute(textValue)
-                                                textValue = updated
-                                                val updatedBlocks = blocks.toMutableList()
-                                                updatedBlocks[index] = MarkdownBlock.TextBlock(updated.text)
-                                                onContentChanged(blocksToMarkdown(updatedBlocks))
+                                        if (formatController != null) {
+                                            if (isFocused) {
+                                                formatController.activeBlockIndex = index
+                                                formatController.lastActiveBlockIndex = index
+                                                formatController.lastActiveBlockTextValue = textValue
+                                                formatController.onFormatAction = { action ->
+                                                    val command = com.usoy.papiro.ui.components.LocalFormatCommand(action)
+                                                    val updated = command.execute(textValue)
+                                                    textValue = updated
+                                                    val updatedBlocks = blocks.toMutableList()
+                                                    updatedBlocks[index] = MarkdownBlock.TextBlock(updated.text)
+                                                    onContentChanged(blocksToMarkdown(updatedBlocks))
+                                                }
+                                            } else {
+                                                if (formatController.activeBlockIndex == index) {
+                                                    formatController.onFormatAction = null
+                                                    formatController.activeBlockIndex = null
+                                                }
                                             }
                                         }
                                     }
@@ -864,6 +955,10 @@ fun MarkdownRenderer(
                                             onValueChange = { newVal ->
                                                 val processedValue = handleBulletListTyping(textValue, newVal)
                                                 textValue = processedValue
+                                                if (formatController != null && isFocused) {
+                                                    formatController.lastActiveBlockIndex = index
+                                                    formatController.lastActiveBlockTextValue = processedValue
+                                                }
                                                 val updatedBlocks = blocks.toMutableList()
                                                 updatedBlocks[index] = MarkdownBlock.TextBlock(processedValue.text)
                                                 onContentChanged(blocksToMarkdown(updatedBlocks))
@@ -996,7 +1091,8 @@ fun MarkdownRenderer(
                                             showControls = onContentChanged != null,
                                             modifier = Modifier
                                                 .padding(start = 0.dp, end = endPadding, top = topPadding, bottom = bottomPadding)
-                                                .weight(1f)
+                                                .weight(1f),
+                                            formatController = formatController
                                         ) {
                                             CodeBlockView(
                                                 block = block,
@@ -1028,7 +1124,8 @@ fun MarkdownRenderer(
                                         showControls = onContentChanged != null,
                                         modifier = Modifier
                                             .padding(start = 0.dp, end = endPadding, top = topPadding, bottom = bottomPadding)
-                                            .weight(1f)
+                                            .weight(1f),
+                                        formatController = formatController
                                     ) {
                                         MathBlockView(
                                             block = block,
@@ -1083,7 +1180,8 @@ fun MarkdownRenderer(
                                         showControls = onContentChanged != null,
                                         modifier = Modifier
                                             .padding(start = 0.dp, end = endPadding, top = topPadding, bottom = bottomPadding)
-                                            .weight(1f)
+                                            .weight(1f),
+                                        formatController = formatController
                                     ) {
                                         TableBlockView(
                                             block = block,
@@ -1138,7 +1236,8 @@ fun MarkdownRenderer(
                                         showControls = onContentChanged != null,
                                         modifier = Modifier
                                             .padding(start = 0.dp, end = endPadding, top = topPadding, bottom = bottomPadding)
-                                            .weight(1f)
+                                            .weight(1f),
+                                        formatController = formatController
                                     ) {
                                         DiagramBlockView(
                                             block = block,
@@ -1169,7 +1268,8 @@ fun MarkdownRenderer(
                                         showControls = onContentChanged != null,
                                         modifier = Modifier
                                             .padding(start = 0.dp, end = endPadding, top = topPadding, bottom = bottomPadding)
-                                            .weight(1f)
+                                            .weight(1f),
+                                        formatController = formatController
                                     ) {
                                         if (onContentChanged != null && onEditDrawingClick != null) {
                                             DrawingBlockView(
@@ -1271,7 +1371,8 @@ fun MarkdownRenderer(
                                         showControls = onContentChanged != null,
                                         modifier = Modifier
                                             .padding(start = 0.dp, end = endPadding, top = topPadding, bottom = bottomPadding)
-                                            .weight(1f)
+                                            .weight(1f),
+                                        formatController = formatController
                                     ) {
                                         ImageView(block)
                                     }
@@ -1576,26 +1677,28 @@ fun HorizontalRuleView() {
 }
 
 fun blocksToMarkdown(blocks: List<MarkdownBlock>): String {
-    return blocks.joinToString("\n") { block ->
-        when (block) {
-            is MarkdownBlock.HorizontalRule -> "---"
+    val sb = java.lang.StringBuilder()
+    for (i in blocks.indices) {
+        val block = blocks[i]
+        val blockStr = when (block) {
+            is MarkdownBlock.HorizontalRule -> "\n\n---\n\n"
             is MarkdownBlock.TextBlock -> block.text
             is MarkdownBlock.Header -> "#".repeat(block.level) + " " + block.text
             is MarkdownBlock.Paragraph -> block.text
             is MarkdownBlock.ListItem -> (if (block.level == 2) "-- " else "- ") + block.text
-            is MarkdownBlock.CodeBlock -> "```${block.language}\n${block.code}\n```"
+            is MarkdownBlock.CodeBlock -> "\n\n```${block.language}\n${block.code}\n```\n\n"
             is MarkdownBlock.DiagramBlock -> if (block.title.lowercase() == "mermaid" || block.title.lowercase() == "diagram" || block.title.isEmpty()) {
-                "```mermaid\n${block.syntax}\n```"
+                "\n\n```mermaid\n${block.syntax}\n```\n\n"
             } else {
-                "```mermaid ${block.title}\n${block.syntax}\n```"
+                "\n\n```mermaid ${block.title}\n${block.syntax}\n```\n\n"
             }
-            is MarkdownBlock.DrawingBlock -> "```drawing\n${block.json}\n```"
-            is MarkdownBlock.Image -> "![${block.altText}](${block.path})"
-            is MarkdownBlock.MathBlock -> "$$\n${block.equation}\n$$"
+            is MarkdownBlock.DrawingBlock -> "\n\n```drawing\n${block.json}\n```\n\n"
+            is MarkdownBlock.Image -> "\n\n![${block.altText}](${block.path})\n\n"
+            is MarkdownBlock.MathBlock -> "\n\n$$\n${block.equation}\n$$\n\n"
             is MarkdownBlock.TableBlock -> {
-                val sb = StringBuilder()
-                sb.append("| ").append(block.headers.joinToString(" | ")).append(" |\n")
-                sb.append("| ").append(block.alignments.map { align ->
+                val sbt = StringBuilder()
+                sbt.append("\n\n| ").append(block.headers.joinToString(" | ")).append(" |\n")
+                sbt.append("| ").append(block.alignments.map { align ->
                     when (align) {
                         "center" -> ":---:"
                         "right" -> "---:"
@@ -1603,15 +1706,119 @@ fun blocksToMarkdown(blocks: List<MarkdownBlock>): String {
                     }
                 }.joinToString(" | ")).append(" |")
                 if (block.rows.isNotEmpty()) {
-                    sb.append("\n")
-                    sb.append(block.rows.joinToString("\n") { row ->
+                    sbt.append("\n")
+                    sbt.append(block.rows.joinToString("\n") { row ->
                         "| " + row.joinToString(" | ") + " |"
                     })
                 }
-                sb.toString()
+                sbt.append("\n\n")
+                sbt.toString()
             }
         }
+        sb.append(blockStr).append("\n\n")
     }
+    var res = sb.toString()
+    // normalize spacing
+    while (res.contains("\n\n\n")) {
+        res = res.replace("\n\n\n", "\n\n")
+    }
+    return res.trim()
+}
+
+fun insertMarkdownBlock(
+    currentText: String,
+    newBlock: MarkdownBlock,
+    formatController: MarkdownFormatController?
+): String {
+    val blocks = parseMarkdown(currentText)
+    val activeIndex = formatController?.lastActiveBlockIndex ?: (blocks.size - 1)
+    
+    val result = mutableListOf<MarkdownBlock>()
+    
+    if (activeIndex !in blocks.indices) {
+        // Empty or out of bounds: append at the end
+        result.addAll(blocks)
+        if (result.isNotEmpty() && result.last() !is MarkdownBlock.HorizontalRule) {
+            result.add(MarkdownBlock.HorizontalRule())
+        }
+        result.add(newBlock)
+        result.add(MarkdownBlock.HorizontalRule())
+    } else {
+        val activeBlock = blocks[activeIndex]
+        if (activeBlock is MarkdownBlock.TextBlock) {
+            val textVal = formatController?.lastActiveBlockTextValue
+            val text = activeBlock.text
+            
+            val (start, end) = if (textVal != null && textVal.text == text) {
+                Pair(
+                    kotlin.math.min(textVal.selection.start, textVal.selection.end).coerceIn(0, text.length),
+                    kotlin.math.max(textVal.selection.start, textVal.selection.end).coerceIn(0, text.length)
+                )
+            } else {
+                // Fallback to end of text
+                Pair(text.length, text.length)
+            }
+            
+            val beforeText = text.substring(0, start).trimEnd('\n')
+            val afterText = text.substring(end).trimStart('\n')
+            
+            result.addAll(blocks.subList(0, activeIndex))
+            
+            if (beforeText.isNotEmpty() || (activeIndex == 0 && afterText.isEmpty() && beforeText.isEmpty())) {
+                result.add(MarkdownBlock.TextBlock(beforeText))
+            }
+            
+            if (result.isEmpty() || result.last() !is MarkdownBlock.HorizontalRule) {
+                result.add(MarkdownBlock.HorizontalRule())
+            }
+            
+            result.add(newBlock)
+            
+            result.add(MarkdownBlock.HorizontalRule())
+            
+            if (afterText.isNotEmpty() || (activeIndex == blocks.lastIndex && beforeText.isEmpty() && afterText.isEmpty())) {
+                result.add(MarkdownBlock.TextBlock(afterText))
+            }
+            
+            result.addAll(blocks.subList(activeIndex + 1, blocks.size))
+        } else {
+            // Active block is specialized: insert immediately after it
+            result.addAll(blocks.subList(0, activeIndex + 1))
+            
+            if (result.isEmpty() || result.last() !is MarkdownBlock.HorizontalRule) {
+                result.add(MarkdownBlock.HorizontalRule())
+            }
+            
+            result.add(newBlock)
+            
+            result.add(MarkdownBlock.HorizontalRule())
+            
+            result.addAll(blocks.subList(activeIndex + 1, blocks.size))
+        }
+    }
+    
+    // Clean up consecutive HorizontalRules to prevent redundant separator lines
+    val finalBlocks = mutableListOf<MarkdownBlock>()
+    for (b in result) {
+        if (b is MarkdownBlock.HorizontalRule) {
+            if (finalBlocks.isEmpty() || finalBlocks.last() !is MarkdownBlock.HorizontalRule) {
+                finalBlocks.add(b)
+            }
+        } else {
+            finalBlocks.add(b)
+        }
+    }
+    
+    // Update formatController active index to point to the new block so next insertion works seamlessly!
+    if (formatController != null) {
+        val newIndex = finalBlocks.indexOf(newBlock)
+        if (newIndex != -1) {
+            formatController.lastActiveBlockIndex = newIndex
+            formatController.lastActiveBlockTextValue = null
+        }
+    }
+    
+    return blocksToMarkdown(finalBlocks)
 }
 
 @Composable
@@ -3241,6 +3448,19 @@ fun parseMarkdown(text: String): List<MarkdownBlock> {
     while (i < lines.size) {
         val line = lines[i]
         val trimmed = line.trim()
+
+        // Horizontal Rule check: ---, ***, or ___
+        val isHr = trimmed.length >= 3 && (
+            trimmed.all { it == '-' } ||
+            trimmed.all { it == '*' } ||
+            trimmed.all { it == '_' }
+        )
+        if (isHr) {
+            flushText()
+            blocks.add(MarkdownBlock.HorizontalRule())
+            i++
+            continue
+        }
 
         // 1.5 Block Math check: $$ ... $$
         if (trimmed.startsWith("$$")) {

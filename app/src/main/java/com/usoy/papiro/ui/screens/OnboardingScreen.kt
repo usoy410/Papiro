@@ -103,14 +103,14 @@ fun FeaturesIntroScreen() {
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = Icons.Default.MenuBook,
+            painter = androidx.compose.ui.res.painterResource(id = com.usoy.papiro.R.drawable.ic_launcher_foreground),
             contentDescription = "App Logo",
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(80.dp)
+            modifier = Modifier.size(80.dp).background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.CircleShape)
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Welcome to Papiro v2.1",
+            text = "Welcome to Papiro",
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -227,7 +227,8 @@ fun ApiKeySetupScreen(settingsStore: SettingsStore) {
             onValueChange = { apiKeyInput = it },
             label = { Text("Paste API Key Here") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
         )
 
         Spacer(modifier = Modifier.height(16.dp))
