@@ -18,8 +18,8 @@ android {
     applicationId = "com.usoy.papiro"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.1"
+    versionCode = 4
+    versionName = "2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -104,7 +104,9 @@ dependencies {
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   implementation(libs.firebase.appcheck.recaptcha)
-  implementation(libs.mediapipe.tasks.genai)
+  // implementation(libs.mediapipe.tasks.genai)
+  implementation(libs.play.services.mlkit.text.recognition)
+  implementation(libs.play.services.mlkit.digital.ink.recognition)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)

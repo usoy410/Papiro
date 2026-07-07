@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
@@ -42,7 +43,7 @@ fun NoteListScreen(
     viewModel: NoteViewModel,
     onNoteSelected: (NoteEntity) -> Unit,
     onSettingsClick: () -> Unit,
-    onUploadDocumentClick: () -> Unit,
+    onUploadDocumentClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val notes by viewModel.allNotes.collectAsState()
@@ -50,7 +51,7 @@ fun NoteListScreen(
 
     var selectedNoteIds by remember { mutableStateOf(setOf<Long>()) }
     var isSelectionMode by remember { mutableStateOf(false) }
-    var noteToDelete by remember { mutableStateOf<NoteEntity?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     var isFabExpanded by remember { mutableStateOf(false) }
     val fabRotation by animateFloatAsState(
         targetValue = if (isFabExpanded) 45f else 0f,
@@ -68,7 +69,7 @@ fun NoteListScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { noteToDelete = notes.find { it.id == selectedNoteIds.first() } }) {
+                        IconButton(onClick = { showDeleteDialog = true }) {
                             Icon(Icons.Default.Delete, "Delete")
                         }
                     }
@@ -114,7 +115,7 @@ fun NoteListScreen(
                                 FloatingActionButton(
                                     onClick = {
                                         isFabExpanded = false
-                                        onUploadDocumentClick()
+                                        onUploadDocumentClick("Note")
                                     },
                                     modifier = Modifier.size(48.dp),
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -140,8 +141,9 @@ fun NoteListScreen(
                                 FloatingActionButton(
                                     onClick = {
                                         isFabExpanded = false
-                                        viewModel.createNewNote()
-                                        viewModel.currentNote.value?.let { onNoteSelected(it) }
+                                        viewModel.createNewNote { insertedNote ->
+                                            onNoteSelected(insertedNote)
+                                        }
                                     },
                                     modifier = Modifier.size(48.dp),
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -168,16 +170,16 @@ fun NoteListScreen(
         },
         modifier = modifier.fillMaxSize()
     ) { paddingValues ->
-        if (noteToDelete != null) {
+        if (showDeleteDialog) {
             AlertDialog(
-                onDismissRequest = { noteToDelete = null },
-                title = { Text("Delete Note") },
-                text = { Text("Are you sure you want to delete this note?") },
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("Delete Notes") },
+                text = { Text("Are you sure you want to delete the selected note(s)?") },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            viewModel.deleteNote(noteToDelete!!.id)
-                            noteToDelete = null
+                            viewModel.deleteNotes(selectedNoteIds)
+                            showDeleteDialog = false
                             selectedNoteIds = emptySet()
                             isSelectionMode = false
                         },
@@ -187,7 +189,7 @@ fun NoteListScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { noteToDelete = null }) {
+                    TextButton(onClick = { showDeleteDialog = false }) {
                         Text("Cancel")
                     }
                 }
@@ -201,6 +203,13 @@ fun NoteListScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Empty notes icon",
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "No notes yet",
                         style = MaterialTheme.typography.titleMedium,

@@ -1,5 +1,8 @@
 package com.usoy.papiro.ui.screens
 
+import com.usoy.papiro.ui.components.*
+import com.usoy.papiro.ui.components.*
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -42,15 +45,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-import com.usoy.papiro.ui.components.NotebookBackground
-import com.usoy.papiro.ui.components.NotebookBackgroundType
-import com.usoy.papiro.ui.components.MarkdownRenderer
-import com.usoy.papiro.ui.components.CanvasCreatorDialog
-import com.usoy.papiro.ui.components.FullscreenDrawingEditor
-import com.usoy.papiro.ui.components.DrawingData
-import com.usoy.papiro.ui.components.DrawPath
-import com.usoy.papiro.ui.components.MarkdownVisualTransformation
-import com.usoy.papiro.ui.components.updateBlockInContent
 import com.usoy.papiro.viewmodel.NoteViewModel
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -71,9 +65,12 @@ fun NoteEditorScreen(
     var title by remember { mutableStateOf("") }
     var contentValue by remember { mutableStateOf(TextFieldValue("")) }
     var backgroundType by remember { mutableStateOf(NotebookBackgroundType.GRID) }
+    var showAiTutorBox by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
+    var showMarkdownSymbols by remember { mutableStateOf(false) }
     var showWrenchTools by remember { mutableStateOf(false) }
     var isTyping by remember { mutableStateOf(false) }
+    var isQuizGenerating by remember { mutableStateOf(false) }
 
     // Drawing tool states
     var showCanvasCreator by remember { mutableStateOf(false) }
@@ -86,8 +83,19 @@ fun NoteEditorScreen(
     var showAiDialog by remember { mutableStateOf(false) }
     var aiTopic by remember { mutableStateOf("") }
 
+    // Dialog state for Quiz generator
+    var showQuizDialog by remember { mutableStateOf(false) }
+    var quizType by remember { mutableStateOf("Multiple Choice") }
+    var quizDifficulty by remember { mutableStateOf("Medium") }
+    var quizItems by remember { mutableStateOf("5") }
+
     // Dialog state for Formatting Help Guide
     var showHelpDialog by remember { mutableStateOf(false) }
+
+    // Dynamic temporary text generation states
+    var textBeforeGeneration by remember { mutableStateOf("") }
+    var isGeneratingTempText by remember { mutableStateOf(false) }
+    var tempTextJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val anchorPositions = remember { mutableMapOf<String, androidx.compose.ui.layout.LayoutCoordinates>() }
     var readerContentCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
@@ -96,7 +104,10 @@ fun NoteEditorScreen(
     // Undo / Redo Manager
     val undoRedoManager = remember { UndoRedoManager(contentValue) }
     
+    val formatController = remember { com.usoy.papiro.ui.components.MarkdownFormatController() }
+    
     var showHistoryDialog by remember { mutableStateOf(false) }
+    var showTableConfigDialog by remember { mutableStateOf(false) }
 
     val historySnapshots by remember(currentNote) {
         val id = currentNote?.id ?: 0L
@@ -112,6 +123,36 @@ fun NoteEditorScreen(
         undoRedoManager.saveState(contentValue)
     }
 
+    LaunchedEffect(isGenerating, isTyping) {
+        if (!isGenerating && !isTyping) {
+            isQuizGenerating = false
+        }
+    }
+
+    LaunchedEffect(isGenerating) {
+        if (!isGenerating && isGeneratingTempText) {
+            tempTextJob?.cancel()
+            tempTextJob = null
+            // Revert back to original text if the temporary markers are still present
+            val curText = contentValue.text
+            if (curText.contains("🤖 Generating text") || 
+                curText.contains("🧠 Thinking...") || 
+                curText.contains("Drafting structured") || 
+                curText.contains("Formatting beautiful")) {
+                contentValue = TextFieldValue(text = textBeforeGeneration, selection = androidx.compose.ui.text.TextRange(textBeforeGeneration.length))
+            }
+            isGeneratingTempText = false
+        }
+    }
+
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.uiEvent.collect { event ->
+            snackbarHostState.showSnackbar(event)
+        }
+    }
+
     // Initialize editor fields when a note is loaded
     LaunchedEffect(currentNote) {
         currentNote?.let {
@@ -122,39 +163,35 @@ fun NoteEditorScreen(
             } catch (e: Exception) {
                 NotebookBackgroundType.GRID
             }
-            isEditing = it.content.isEmpty() && it.title.isEmpty()
+            isEditing = if (it.backgroundType == "QUIZ") false else (it.content.isEmpty() && it.title.isEmpty())
+            showAiTutorBox = (it.backgroundType == "QUIZ")
             undoRedoManager.reset(contentValue)
         }
     }
 
     // Media and OCR picker
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
-                val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-
-                if (bitmap != null) {
-                    val baos = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos)
-                    val bytes = baos.toByteArray()
-
-                    viewModel.extractTextFromImage(bytes) { text ->
-                        // Append OCR extracted text to the bottom of the content
-                        val currentText = contentValue.text
-                        val prefix = if (currentText.isNotEmpty()) {
-                            if (currentText.endsWith("\n")) "\n" else "\n\n"
-                        } else {
-                            ""
-                        }
-                        val newText = currentText + prefix + text
-                        contentValue = TextFieldValue(
-                            text = newText,
-                            selection = androidx.compose.ui.text.TextRange(newText.length)
-                        )
+                viewModel.extractTextFromDocument(context, uri) { text ->
+                    // Append OCR extracted text to the bottom of the content
+                    val currentText = contentValue.text
+                    val prefix = if (currentText.isNotEmpty()) {
+                        if (currentText.endsWith("\n")) "\n" else "\n\n"
+                    } else {
+                        ""
+                    }
+                    val newText = currentText + prefix + text
+                    contentValue = TextFieldValue(
+                        text = newText,
+                        selection = androidx.compose.ui.text.TextRange(newText.length)
+                    )
+                    viewModel.generateTitleIfEmpty(title, contentValue.text) { newTitle ->
+                        title = newTitle
+                        val saveBgType = if (currentNote?.backgroundType == "QUIZ") "QUIZ" else backgroundType.name
+                        viewModel.saveNote(title, contentValue.text, saveBgType)
                     }
                 }
             } catch (e: Exception) {
@@ -196,6 +233,7 @@ fun NoteEditorScreen(
     }
 
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -211,7 +249,8 @@ fun NoteEditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        viewModel.saveNote(title, contentValue.text, backgroundType.name)
+                        val saveBgType = if (currentNote?.backgroundType == "QUIZ") "QUIZ" else backgroundType.name
+                        viewModel.saveNote(title, contentValue.text, saveBgType)
                         onBack()
                     }) {
                         Icon(
@@ -222,22 +261,48 @@ fun NoteEditorScreen(
                     }
                 },
                 actions = {
-                    // Notebook theme changer
-                    IconButton(
-                        onClick = {
-                            backgroundType = when (backgroundType) {
-                                NotebookBackgroundType.GRID -> NotebookBackgroundType.RULED
-                                NotebookBackgroundType.RULED -> NotebookBackgroundType.DOTS
-                                NotebookBackgroundType.DOTS -> NotebookBackgroundType.BLANK
-                                NotebookBackgroundType.BLANK -> NotebookBackgroundType.GRID
+                    // Notebook theme changer only visible in view mode
+                    if (!isEditing) {
+                        IconButton(
+                            onClick = {
+                                showAiTutorBox = !showAiTutorBox
                             }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SmartToy,
+                                contentDescription = "Toggle AI Tutor",
+                                tint = if (showAiTutorBox) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.GridOn,
-                            contentDescription = "Switch paper type",
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
+                        IconButton(
+                            onClick = {
+                                backgroundType = when (backgroundType) {
+                                    NotebookBackgroundType.GRID -> NotebookBackgroundType.RULED
+                                    NotebookBackgroundType.RULED -> NotebookBackgroundType.DOTS
+                                    NotebookBackgroundType.DOTS -> NotebookBackgroundType.BLANK
+                                    NotebookBackgroundType.BLANK -> NotebookBackgroundType.GRID
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GridOn,
+                                contentDescription = "Switch paper type",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    } else {
+                        // "fat Eye" toggler only visible in edit mode
+                        IconButton(
+                            onClick = {
+                                showMarkdownSymbols = !showMarkdownSymbols
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (showMarkdownSymbols) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = "Toggle Markdown Symbols",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
 
                     // Edit / Save toggle action
@@ -258,22 +323,24 @@ fun NoteEditorScreen(
                         }
                     }
 
-                    IconButton(
-                        onClick = {
-                            if (isEditing) {
-                                viewModel.saveNote(title, contentValue.text, backgroundType.name)
-                                isEditing = false
-                            } else {
-                                isEditing = true
-                            }
-                        },
-                        modifier = Modifier.testTag(if (isEditing) "save_note_button" else "edit_note_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isEditing) Icons.Default.Save else Icons.Default.Edit,
-                            contentDescription = if (isEditing) "Save note" else "Edit note",
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
+                    if (currentNote?.backgroundType != "QUIZ") {
+                        IconButton(
+                            onClick = {
+                                if (isEditing) {
+                                    viewModel.saveNote(title, contentValue.text, backgroundType.name)
+                                    isEditing = false
+                                } else {
+                                    isEditing = true
+                                }
+                            },
+                            modifier = Modifier.testTag(if (isEditing) "save_note_button" else "edit_note_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isEditing) Icons.Default.Save else Icons.Default.Edit,
+                                contentDescription = if (isEditing) "Save note" else "Edit note",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -282,8 +349,23 @@ fun NoteEditorScreen(
             )
         },
         bottomBar = {
-            // Toolbar accessories (bold, italic, tags, quick symbols)
-            if (isEditing) {
+            if (showAiTutorBox && !isEditing) {
+                AskAiTutorInputBox(
+                    viewModel = viewModel,
+                    currentNoteContent = contentValue.text,
+                    onAnswerReceived = { updatedContent ->
+                        currentNote?.let { note ->
+                            val updatedWithToc = viewModel.updateExistingToc(updatedContent)
+                            viewModel.generateTitleIfEmpty(title, updatedWithToc) { newTitle ->
+                                title = newTitle
+                                viewModel.saveNote(title, updatedWithToc, note.backgroundType)
+                                contentValue = TextFieldValue(updatedWithToc)
+                            }
+                        }
+                    }
+                )
+            } else if (isEditing) {
+                // Toolbar accessories (bold, italic, tags, quick symbols)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -294,8 +376,14 @@ fun NoteEditorScreen(
                     if (showWrenchTools) {
                         EngineeringToolsRow(
                             onAiClick = { showAiDialog = true },
-                            onOcrClick = { imagePickerLauncher.launch("image/*") },
-                            onDrawClick = { showCanvasCreator = true },
+                            onQuizClick = { showQuizDialog = true },
+                            onOcrClick = { imagePickerLauncher.launch(arrayOf("image/*", "application/pdf")) },
+                            onDrawClick = {
+                                drawingWidth = 320
+                                drawingHeight = 240
+                                currentEditingDrawing = null
+                                showDrawingEditor = true
+                            },
                             onImageImportClick = { picturePickerLauncher.launch("image/*") },
                             viewModel = viewModel
                         )
@@ -304,10 +392,18 @@ fun NoteEditorScreen(
 
                     FormattingToolbar(
                         onFormatAction = { action ->
-                            undoRedoManager.recordExplicitSnapshot(contentValue)
-                            val newContent = applyFormatting(contentValue.text, contentValue.selection, action)
-                            contentValue = newContent
-                            undoRedoManager.recordExplicitSnapshot(newContent)
+                            if (action == "TABLE") {
+                                showTableConfigDialog = true
+                            } else {
+                                val localAction = formatController.onFormatAction
+                                if (localAction != null) {
+                                    localAction(action)
+                                } else {
+                                    val command = com.usoy.papiro.ui.components.FormatCommand(action)
+                                    undoRedoManager.executeCommand(command)
+                                    contentValue = undoRedoManager.currentState
+                                }
+                            }
                         },
                         onUndoClick = {
                             undoRedoManager.undo()?.let { previous ->
@@ -329,14 +425,18 @@ fun NoteEditorScreen(
         },
         modifier = modifier.fillMaxSize()
     ) { paddingValues ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            val minHeight = maxHeight
             val editorScrollState = rememberScrollState()
+            LaunchedEffect(contentValue.text) {
+                if (currentNote?.backgroundType == "QUIZ") {
+                    editorScrollState.animateScrollTo(editorScrollState.maxValue)
+                }
+            }
             var requestFocus by remember { mutableStateOf(false) }
 
             if (isEditing) {
@@ -436,6 +536,7 @@ fun NoteEditorScreen(
                                         selection = androidx.compose.ui.text.TextRange(newText.length)
                                     )
                                 },
+                                formatController = formatController,
                                 onEditDrawingClick = { drawing ->
                                     currentEditingDrawing = drawing
                                     drawingWidth = drawing.width
@@ -444,12 +545,16 @@ fun NoteEditorScreen(
                                 },
                                 requestFocus = requestFocus,
                                 onRequestFocusConsumed = { requestFocus = false },
-                                onEnhanceBlock = { textToEnhance, onResult ->
-                                    viewModel.enhanceNote(textToEnhance) { enhancedText ->
-                                        onResult(enhancedText)
+                                onEnhanceBlock = if (viewModel.settingsStore.provider == com.usoy.papiro.data.SettingsStore.PROVIDER_GEMINI) {
+                                    { textToEnhance, onResult ->
+                                        viewModel.enhanceNote(textToEnhance) { enhancedText ->
+                                            onResult(enhancedText)
+                                        }
                                     }
-                                },
+                                } else null,
                                 contentPadding = PaddingValues(start = 72.dp, end = 16.dp),
+                                showMarkdownSymbols = showMarkdownSymbols,
+                                isGeneratingQuiz = isQuizGenerating && (isGenerating || isTyping),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = 600.dp)
@@ -585,7 +690,8 @@ fun NoteEditorScreen(
                                 onHeaderPositioned = { id, coords ->
                                     android.util.Log.d("PapiroNoteEditor", "Header Positioned: $id")
                                     anchorPositions[id] = coords
-                                }
+                                },
+                                isGeneratingQuiz = isQuizGenerating && (isGenerating || isTyping)
                             )
                             Spacer(modifier = Modifier.height(600.dp))
                         }
@@ -640,7 +746,7 @@ fun NoteEditorScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "GEMINI CLOUD SCANNER",
+                                text = "SMART SCANNER",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -661,100 +767,89 @@ fun NoteEditorScreen(
     }
 
     // AI Topic Generator Dialog
-    if (showAiDialog) {
-        val currentProvider = viewModel.settingsStore.provider
-        val providerName = when (currentProvider) {
-            com.usoy.papiro.data.SettingsStore.PROVIDER_OLLAMA -> "Local Ollama"
-            com.usoy.papiro.data.SettingsStore.PROVIDER_LOCAL_ON_DEVICE -> "On-Device Model"
-            else -> "Google Gemini"
-        }
-        AlertDialog(
-            onDismissRequest = { showAiDialog = false },
-            title = {
-                Text(
-                    text = "GENERATE BLUEPRINT NOTE",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Specify any topic or concept (e.g., Dijkstra's Algorithm, Big-O Notation, TCP Handshake) and our $providerName will compose an active note structure.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                    OutlinedTextField(
-                        value = aiTopic,
-                        onValueChange = { aiTopic = it },
-                        placeholder = { Text("Topic keyword") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showAiDialog = false
-                        if (title.isEmpty()) {
-                            title = aiTopic
-                        }
-                        isEditing = true
-                        
-                        val initialText = contentValue.text
-                        val prefix = if (initialText.isNotEmpty()) {
-                            if (initialText.endsWith("\n")) "\n" else "\n\n"
-                        } else {
-                            ""
-                        }
-                        
-                        viewModel.generateAiNotes(aiTopic, existingContent = initialText) { generatedMarkdown ->
-                            coroutineScope.launch {
-                                isTyping = true
-                                val baseText = initialText + prefix
-                                val chunks = generatedMarkdown.split(Regex("(?<=\\s)|(?=[\\n])"))
-                                var currentTyped = ""
-                                for (chunk in chunks) {
-                                    currentTyped += chunk
-                                    val fullText = baseText + currentTyped
-                                    contentValue = TextFieldValue(
-                                        text = fullText,
-                                        selection = androidx.compose.ui.text.TextRange(fullText.length)
-                                    )
-                                    kotlinx.coroutines.delay(20) // adjust typing speed here
-                                }
-                                isEditing = false
-                                isTyping = false
-                            }
-                        }
-                    }
-                ) {
-                    Text("BUILD")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAiDialog = false }) {
-                    Text("CANCEL")
-                }
+    com.usoy.papiro.ui.components.AiTopicGeneratorDialog(
+        showAiDialog = showAiDialog,
+        provider = viewModel.settingsStore.provider,
+        onDismiss = { showAiDialog = false },
+        onBuild = { topic ->
+            if (title.isEmpty()) title = topic
+            isEditing = true
+            val initialText = contentValue.text
+            val prefix = if (initialText.isNotEmpty()) { if (initialText.endsWith("\n")) "\n" else "\n\n" } else { "" }
+            
+            textBeforeGeneration = initialText
+            isGeneratingTempText = true
+            tempTextJob?.cancel()
+            tempTextJob = startTemporaryTextCycle(coroutineScope, initialText, prefix) { updatedValue ->
+                contentValue = updatedValue
             }
-        )
-    }
 
-    // Canvas Creator Dialog overlay
-    if (showCanvasCreator) {
-        CanvasCreatorDialog(
-            onDismiss = { showCanvasCreator = false },
-            onConfirm = { width, height ->
-                drawingWidth = width
-                drawingHeight = height
-                currentEditingDrawing = null
-                showCanvasCreator = false
-                showDrawingEditor = true
+            viewModel.generateAiNotes(topic, existingContent = initialText) { generatedMarkdown ->
+                tempTextJob?.cancel()
+                tempTextJob = null
+                isGeneratingTempText = false
+                coroutineScope.launch {
+                    val baseText = initialText + prefix
+                    val fullText = baseText + generatedMarkdown
+                    contentValue = TextFieldValue(text = fullText, selection = androidx.compose.ui.text.TextRange(fullText.length))
+                    isEditing = false
+                    viewModel.generateTitleIfEmpty(title, contentValue.text) { newTitle ->
+                        title = newTitle
+                        currentNote?.let { note -> viewModel.saveNote(title, contentValue.text, note.backgroundType) }
+                    }
+                }
             }
-        )
-    }
+        }
+    )
+
+    // Quiz Generator Dialog
+    com.usoy.papiro.ui.components.QuizGeneratorDialog(
+        showQuizDialog = showQuizDialog,
+        provider = viewModel.settingsStore.provider,
+        onDismiss = { showQuizDialog = false },
+        onGenerate = { generatedQuizType, generatedQuizDifficulty, generatedQuizItems ->
+            isEditing = true
+            isQuizGenerating = true
+            val initialText = contentValue.text
+            val prefix = if (initialText.isNotEmpty()) { if (initialText.endsWith("\n")) "\n" else "\n\n" } else { "" }
+            val quizPrompt = com.usoy.papiro.util.PromptTemplates.getQuizPrompt(
+                quizType = generatedQuizType,
+                difficultyLevel = generatedQuizDifficulty,
+                numberOfItems = generatedQuizItems,
+                contextText = "the following note:\n${contentValue.text}"
+            )
+            
+            textBeforeGeneration = initialText
+            isGeneratingTempText = true
+            tempTextJob?.cancel()
+            tempTextJob = startTemporaryTextCycle(coroutineScope, initialText, prefix) { updatedValue ->
+                contentValue = updatedValue
+            }
+
+            viewModel.generateCustomPrompt(quizPrompt) { generatedMarkdown ->
+                tempTextJob?.cancel()
+                tempTextJob = null
+                isGeneratingTempText = false
+                coroutineScope.launch {
+                    val baseText = initialText + prefix
+                    val quizHeader = if (!initialText.contains("## 📝 Practice Quiz") && !initialText.contains("## 📝 Interactive Study Quiz")) {
+                        "## 📝 Practice Quiz\n\n"
+                    } else {
+                        ""
+                    }
+                    val fullText = baseText + quizHeader + generatedMarkdown
+                    val fullTextWithToc = viewModel.updateExistingToc(fullText)
+                    contentValue = TextFieldValue(text = fullTextWithToc, selection = androidx.compose.ui.text.TextRange(fullTextWithToc.length))
+                    isEditing = false
+                    isQuizGenerating = false
+                    viewModel.generateTitleIfEmpty(title, contentValue.text) { newTitle ->
+                        title = newTitle
+                        currentNote?.let { note -> viewModel.saveNote(title, contentValue.text, note.backgroundType) }
+                    }
+                }
+            }
+        }
+    )
 
     // Fullscreen Sketchpad overlay
     if (showDrawingEditor) {
@@ -766,13 +861,13 @@ fun NoteEditorScreen(
                 showDrawingEditor = false
                 currentEditingDrawing = null
             },
-            onSave = { savedPaths ->
+            onSave = { computedWidth, computedHeight, savedPaths ->
                 val currentDrawing = currentEditingDrawing
                 if (currentDrawing != null) {
                     val updatedDrawing = DrawingData(
                         id = currentDrawing.id,
-                        width = drawingWidth,
-                        height = drawingHeight,
+                        width = computedWidth,
+                        height = computedHeight,
                         paths = savedPaths
                     )
                     val updatedContent = updateBlockInContent(contentValue.text, currentDrawing.id, updatedDrawing)
@@ -783,8 +878,8 @@ fun NoteEditorScreen(
                 } else {
                     val newDrawing = DrawingData(
                         id = System.currentTimeMillis().toString(),
-                        width = drawingWidth,
-                        height = drawingHeight,
+                        width = computedWidth,
+                        height = computedHeight,
                         paths = savedPaths
                     )
                     val drawingCodeBlock = "\n```drawing\n${newDrawing.toJson()}\n```\n"
@@ -805,921 +900,90 @@ fun NoteEditorScreen(
         )
     }
 
+    if (showTableConfigDialog) {
+        com.usoy.papiro.ui.components.TableConfigDialog(
+            initialRows = 3,
+            initialCols = 3,
+            initialStyle = com.usoy.papiro.ui.components.TableHeaderStyle.ROW,
+            initialColor = com.usoy.papiro.ui.components.TableHeaderColor.DEFAULT,
+            onDismiss = { showTableConfigDialog = false },
+            onConfirm = { rows, cols, style, color ->
+                showTableConfigDialog = false
+                val tableMarkdown = com.usoy.papiro.ui.components.generateMarkdownTable(rows, cols, style, color)
+                val command = com.usoy.papiro.ui.components.InsertTableCommand(tableMarkdown)
+                undoRedoManager.executeCommand(command)
+                contentValue = undoRedoManager.currentState
+            }
+        )
+    }
+
     // Markdown formatting guide dialog
-    if (showHelpDialog) {
-        AlertDialog(
-            onDismissRequest = { showHelpDialog = false },
-            title = {
-                Text(
-                    text = "BLUEPRINT ENGINE GUIDE",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Standard Markdown Syntax and Advanced Interactive Engineering triggers:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+    com.usoy.papiro.ui.components.MarkdownHelpDialog(
+        showHelpDialog = showHelpDialog,
+        onDismiss = { showHelpDialog = false }
+    )
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    Text(
-                        text = "BASIC MARKDOWN",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    HelpGuideRow(pattern = "# Heading", description = "Creates a large section header.")
-                    HelpGuideRow(pattern = "## Subtitle", description = "Creates a subsection header.")
-                    HelpGuideRow(pattern = "**text**", description = "Formats text in bold style.")
-                    HelpGuideRow(pattern = "*text*", description = "Formats text in italic style.")
-                    HelpGuideRow(pattern = "- item", description = "Creates a bullet list entry.")
-                    HelpGuideRow(pattern = "`code`", description = "Inline code monospace wrapper.")
-                    HelpGuideRow(pattern = "---", description = "Draws a horizontal divider line.")
-                    HelpGuideRow(pattern = "[link](url)", description = "Creates an interactive clickable hyperlink.")
-                    HelpGuideRow(pattern = "| Col A | Col B |", description = "Creates dynamic structured data tables.")
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                    Text(
-                        text = "ENGINEERING BLUEPRINTS",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    HelpGuideRow(
-                        pattern = "```mermaid\ngraph TD;\n  A-->B;\n```",
-                        description = "Generates a schematic node flowchart in your preview page using Mermaid syntax."
-                    )
-                    HelpGuideRow(
-                        pattern = "Hand Sketch",
-                        description = "Tap the sketch tool to sketch drawings directly onto your blueprints using your finger."
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { showHelpDialog = false }
-                ) {
-                    Text("DISMISS")
-                }
-            }
-        )
-    }
-
-    if (showHistoryDialog) {
-        val sdf = remember { java.text.SimpleDateFormat("MMM dd, yyyy - hh:mm a", java.util.Locale.getDefault()) }
-        AlertDialog(
-            onDismissRequest = { showHistoryDialog = false },
-            title = {
-                Text(
-                    text = "NOTE VERSION HISTORY",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            },
-            text = {
-                if (historySnapshots.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No snapshots recorded yet.\nSnapshots are automatically created when you run AI actions or format blocks.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 300.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        historySnapshots.forEach { snapshot ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
-                                ),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = try { sdf.format(java.util.Date(snapshot.timestamp)) } catch (e: Exception) { "" },
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = snapshot.content.take(80) + if (snapshot.content.length > 80) "..." else "",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontStyle = FontStyle.Italic
-                                        )
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    
-                                    Button(
-                                        onClick = {
-                                            undoRedoManager.recordExplicitSnapshot(contentValue)
-                                            currentNote?.let { note ->
-                                                viewModel.insertHistorySnapshot(note.id, contentValue.text)
-                                            }
-                                            val newContent = TextFieldValue(
-                                                text = snapshot.content,
-                                                selection = androidx.compose.ui.text.TextRange(snapshot.content.length)
-                                            )
-                                            contentValue = newContent
-                                            undoRedoManager.recordExplicitSnapshot(newContent)
-                                            showHistoryDialog = false
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                        modifier = Modifier.height(32.dp)
-                                    ) {
-                                        Text("RESTORE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showHistoryDialog = false }) {
-                    Text("CLOSE")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-private fun ToolButton(
-    onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    contentColor: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(containerColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(16.dp),
-            tint = contentColor
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = contentColor
-        )
-    }
-}
-
-@Composable
-fun EngineeringToolsRow(
-    onAiClick: () -> Unit,
-    onOcrClick: () -> Unit,
-    onDrawClick: () -> Unit,
-    onImageImportClick: () -> Unit,
-    viewModel: NoteViewModel
-) {
-    val settingsStore = viewModel.settingsStore
-    val context = LocalContext.current
-
-    // Observe SharedPreferences changes reactive-ly to keep everything perfectly in sync
-    var provider by remember { mutableStateOf(settingsStore.provider) }
-    var selectedCloudModel by remember { mutableStateOf(settingsStore.selectedCloudModel) }
-    var selectedLocalModel by remember { mutableStateOf(settingsStore.selectedLocalModel) }
-    var cloudModels by remember { mutableStateOf(settingsStore.cloudModels) }
-    var localModels by remember { mutableStateOf(settingsStore.localModels) }
-
-    DisposableEffect(settingsStore) {
-        val prefs = context.getSharedPreferences("papiro_settings", android.content.Context.MODE_PRIVATE)
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            when (key) {
-                "provider" -> provider = settingsStore.provider
-                "selected_cloud_model" -> selectedCloudModel = settingsStore.selectedCloudModel
-                "selected_local_model" -> selectedLocalModel = settingsStore.selectedLocalModel
-                "cloud_models_list" -> cloudModels = settingsStore.cloudModels
-                "local_models_list" -> localModels = settingsStore.localModels
-            }
+    com.usoy.papiro.ui.components.VersionHistoryDialog(
+        showHistoryDialog = showHistoryDialog,
+        snapshots = undoRedoManager.snapshots,
+        onDismiss = { showHistoryDialog = false },
+        onRestore = { restoredContent ->
+            contentValue = restoredContent
+            undoRedoManager.recordExplicitSnapshot(restoredContent)
         }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose {
-            prefs.unregisterOnSharedPreferenceChangeListener(listener)
-        }
-    }
-
-    var expanded by remember { mutableStateOf(false) }
-
-    // Read active model and list of models based on active provider, keyed on SettingsStore values to ensure perfect synchronization
-    var activeModel by remember(provider, selectedLocalModel, selectedCloudModel) {
-        mutableStateOf(
-            if (provider == com.usoy.papiro.data.SettingsStore.PROVIDER_OLLAMA) {
-                selectedLocalModel.ifEmpty { "llama3" }
-            } else if (provider == com.usoy.papiro.data.SettingsStore.PROVIDER_LOCAL_ON_DEVICE) {
-                "On-Device Task"
-            } else {
-                selectedCloudModel.ifEmpty { "gemini-3.5-flash" }
-            }
-        )
-    }
-
-    val models = remember(provider, localModels, cloudModels) {
-        if (provider == com.usoy.papiro.data.SettingsStore.PROVIDER_OLLAMA) {
-            localModels
-        } else if (provider == com.usoy.papiro.data.SettingsStore.PROVIDER_LOCAL_ON_DEVICE) {
-            emptyList()
-        } else {
-            cloudModels
-        }
-    }
-
-    val icon = when (provider) {
-        com.usoy.papiro.data.SettingsStore.PROVIDER_OLLAMA -> Icons.Default.Computer
-        com.usoy.papiro.data.SettingsStore.PROVIDER_LOCAL_ON_DEVICE -> Icons.Default.Memory
-        else -> Icons.Default.Cloud
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // AI Note Assistant
-        ToolButton(
-            onClick = onAiClick,
-            icon = Icons.Default.AutoAwesome,
-            label = "AI Assist",
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        )
-
-        // OCR Scan Text
-        ToolButton(
-            onClick = onOcrClick,
-            icon = Icons.Default.DocumentScanner,
-            label = "Scan",
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-        )
-
-        // Draw Canvas
-        ToolButton(
-            onClick = onDrawClick,
-            icon = Icons.Default.Gesture,
-            label = "Draw",
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-        )
-
-        // Import Picture
-        ToolButton(
-            onClick = onImageImportClick,
-            icon = Icons.Default.AddPhotoAlternate,
-            label = "Image",
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        // Active Model Selector with DropdownMenu
-        Box {
-            ToolButton(
-                onClick = { expanded = true },
-                icon = icon,
-                label = activeModel,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                if (provider == com.usoy.papiro.data.SettingsStore.PROVIDER_LOCAL_ON_DEVICE) {
-                    DropdownMenuItem(
-                        text = { Text("Local Task File (Fixed)") },
-                        onClick = { expanded = false }
-                    )
-                } else if (models.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("No models found. Scan in Settings.") },
-                        onClick = { expanded = false }
-                    )
-                } else {
-                    models.forEach { model ->
-                        val isSelected = (model == activeModel)
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    text = model,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                ) 
-                            },
-                            onClick = {
-                                expanded = false
-                                activeModel = model
-                                if (provider == com.usoy.papiro.data.SettingsStore.PROVIDER_OLLAMA) {
-                                    settingsStore.selectedLocalModel = model
-                                } else {
-                                    settingsStore.selectedCloudModel = model
-                                }
-                            },
-                            trailingIcon = {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun FormattingToolbar(
-    onFormatAction: (String) -> Unit,
-    onUndoClick: () -> Unit,
-    onRedoClick: () -> Unit,
-    canUndo: Boolean,
-    canRedo: Boolean,
-    onWrenchToggle: () -> Unit,
-    showWrenchTools: Boolean
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Undo
-        IconButton(
-            onClick = onUndoClick,
-            enabled = canUndo,
-            modifier = Modifier.size(36.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Undo,
-                contentDescription = "Undo",
-                tint = if (canUndo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        // Redo
-        IconButton(
-            onClick = onRedoClick,
-            enabled = canRedo,
-            modifier = Modifier.size(36.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Redo,
-                contentDescription = "Redo",
-                tint = if (canRedo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        VerticalDivider(
-            modifier = Modifier.height(24.dp),
-            color = MaterialTheme.colorScheme.outlineVariant
-        )
-
-        // Wrench toggler for advanced engineering tools
-        IconButton(
-            onClick = onWrenchToggle,
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = if (showWrenchTools) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                contentColor = if (showWrenchTools) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
-            ),
-            modifier = Modifier.size(36.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Build,
-                contentDescription = "Toggle Engineering Tools",
-                modifier = Modifier.size(18.dp)
-            )
-        }
-
-        VerticalDivider(
-            modifier = Modifier.height(24.dp),
-            color = MaterialTheme.colorScheme.outlineVariant
-        )
-
-        // Bold
-        ToolbarIconButton(
-            icon = Icons.Default.FormatBold,
-            contentDescription = "Bold selection",
-            onClick = { onFormatAction("BOLD") }
-        )
-
-        // Italic
-        ToolbarIconButton(
-            icon = Icons.Default.FormatItalic,
-            contentDescription = "Italic selection",
-            onClick = { onFormatAction("ITALIC") }
-        )
-
-        // Insert Link
-        ToolbarIconButton(
-            icon = Icons.Default.Link,
-            contentDescription = "Insert link",
-            onClick = { onFormatAction("LINK") }
-        )
-
-        // H1 header
-        ToolbarTextButton(
-            label = "H1",
-            onClick = { onFormatAction("H1") }
-        )
-
-        // H2 header
-        ToolbarTextButton(
-            label = "H2",
-            onClick = { onFormatAction("H2") }
-        )
-
-        // Bullet List
-        ToolbarIconButton(
-            icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-            contentDescription = "Bullet list",
-            onClick = { onFormatAction("BULLET") }
-        )
-
-        // Inline Code bracket
-        ToolbarTextButton(
-            label = "{}",
-            onClick = { onFormatAction("CODE") }
-        )
-
-        // Text Block
-        ToolbarIconButton(
-            icon = Icons.Default.Edit,
-            contentDescription = "Text block",
-            onClick = { onFormatAction("TEXT_BLOCK") }
-        )
-
-        // Code Block
-        ToolbarIconButton(
-            icon = Icons.Default.Code,
-            contentDescription = "Code block",
-            onClick = { onFormatAction("CODE_BLOCK") }
-        )
-
-        // Schema Diagram Block
-        ToolbarIconButton(
-            icon = Icons.Default.Schema,
-            contentDescription = "Diagram",
-            onClick = { onFormatAction("DIAGRAM") }
-        )
-    }
-}
-
-@Composable
-fun ToolbarIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(36.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-@Composable
-fun ToolbarTextButton(
-    label: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .height(36.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.SansSerif,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@Composable
-fun HelpGuideRow(pattern: String, description: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = pattern,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            ),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(0.35f)
-        )
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(0.65f)
-        )
-    }
-}
-
-private fun toggleInlineFormat(selectedText: String, delimiter: String): Pair<String, Boolean> {
-    if (delimiter == "**") {
-        if (selectedText.startsWith("***") && selectedText.endsWith("***") && selectedText.length >= 6) {
-            return Pair(selectedText.substring(2, selectedText.length - 2), true)
-        }
-        if (selectedText.startsWith("**") && selectedText.endsWith("**") && selectedText.length >= 4) {
-            return Pair(selectedText.substring(2, selectedText.length - 2), true)
-        }
-        return Pair("**$selectedText**", false)
-    } else if (delimiter == "*") {
-        if (selectedText.startsWith("***") && selectedText.endsWith("***") && selectedText.length >= 6) {
-            return Pair(selectedText.substring(1, selectedText.length - 1), true)
-        }
-        if (selectedText.startsWith("**") && selectedText.endsWith("**") && selectedText.length >= 4) {
-            return Pair("*$selectedText*", false)
-        }
-        if (selectedText.startsWith("*") && selectedText.endsWith("*") && selectedText.length >= 2) {
-            return Pair(selectedText.substring(1, selectedText.length - 1), true)
-        }
-        return Pair("*$selectedText*", false)
-    } else if (delimiter == "{") {
-        if (selectedText.startsWith("{ ") && selectedText.endsWith(" }") && selectedText.length >= 4) {
-            return Pair(selectedText.substring(2, selectedText.length - 2), true)
-        }
-        if (selectedText.startsWith("{") && selectedText.endsWith("}") && selectedText.length >= 2) {
-            return Pair(selectedText.substring(1, selectedText.length - 1), true)
-        }
-        return Pair("{ $selectedText }", false)
-    }
-    return Pair(selectedText, false)
-}
-
-// Memento Pattern for Editor Undo/Redo
-data class EditorMemento(val state: TextFieldValue)
-
-class UndoRedoManager(initialState: TextFieldValue) {
-    private val _undoStack = androidx.compose.runtime.mutableStateListOf<EditorMemento>()
-    private val _redoStack = androidx.compose.runtime.mutableStateListOf<EditorMemento>()
-    
-    var currentState: TextFieldValue = initialState
-        private set
-
-    fun saveState(newState: TextFieldValue) {
-        val currentText = currentState.text
-        val newText = newState.text
-        
-        // Save milestone if significant change occurred (e.g. typing a word, deleting)
-        if (kotlin.math.abs(newText.length - currentText.length) > 15 || 
-            newText.endsWith(" ") || newText.endsWith("\n") || 
-            newText.length < currentText.length) {
-            
-            if (_undoStack.isEmpty() || _undoStack.last().state.text != currentText) {
-                _undoStack.add(EditorMemento(currentState))
-                _redoStack.clear()
-            }
-            currentState = newState
-        }
-    }
-    
-    fun recordExplicitSnapshot(newState: TextFieldValue) {
-        if (_undoStack.isEmpty() || _undoStack.last().state.text != currentState.text) {
-             _undoStack.add(EditorMemento(currentState))
-             _redoStack.clear()
-        }
-        currentState = newState
-    }
-    
-    fun undo(): TextFieldValue? {
-        if (_undoStack.isNotEmpty()) {
-            _redoStack.add(EditorMemento(currentState))
-            currentState = _undoStack.removeAt(_undoStack.lastIndex).state
-            return currentState
-        }
-        return null
-    }
-
-    fun redo(): TextFieldValue? {
-        if (_redoStack.isNotEmpty()) {
-            _undoStack.add(EditorMemento(currentState))
-            currentState = _redoStack.removeAt(_redoStack.lastIndex).state
-            return currentState
-        }
-        return null
-    }
-
-    fun reset(initialState: TextFieldValue) {
-        _undoStack.clear()
-        _redoStack.clear()
-        currentState = initialState
-    }
-    
-    val canUndo: Boolean get() = _undoStack.isNotEmpty()
-    val canRedo: Boolean get() = _redoStack.isNotEmpty()
-}
-
-private fun applyBlockFormat(
-    currentText: String,
-    selection: androidx.compose.ui.text.TextRange,
-    formatType: String
-): TextFieldValue {
-    val start = selection.start
-    val end = selection.end
-
-    var lineStart = start
-    while (lineStart > 0 && currentText[lineStart - 1] != '\n') {
-        lineStart--
-    }
-
-    var lineEnd = end
-    while (lineEnd < currentText.length && currentText[lineEnd] != '\n') {
-        lineEnd++
-    }
-
-    val selectedLinesText = currentText.substring(lineStart, lineEnd)
-    val lines = selectedLinesText.split("\n")
-
-    val updatedLines = lines.map { line ->
-        val trimmed = line.trimStart()
-        val leadingWhitespace = line.substring(0, line.length - trimmed.length)
-
-        val prefixInfo = when {
-            trimmed.startsWith("### ") -> Pair("### ", trimmed.removePrefix("### "))
-            trimmed.startsWith("## ") -> Pair("## ", trimmed.removePrefix("## "))
-            trimmed.startsWith("# ") -> Pair("# ", trimmed.removePrefix("# "))
-            trimmed.startsWith("- ") -> Pair("- ", trimmed.removePrefix("- "))
-            else -> Pair("", trimmed)
-        }
-
-        val existingPrefix = prefixInfo.first
-        val contentWithoutPrefix = prefixInfo.second
-
-        val targetPrefix = when (formatType) {
-            "H1" -> "# "
-            "H2" -> "## "
-            "BULLET" -> "- "
-            else -> ""
-        }
-
-        if (existingPrefix == targetPrefix) {
-            leadingWhitespace + contentWithoutPrefix
-        } else {
-            leadingWhitespace + targetPrefix + contentWithoutPrefix
-        }
-    }
-
-    val newSelectedLinesText = updatedLines.joinToString("\n")
-    val newText = currentText.replaceRange(lineStart, lineEnd, newSelectedLinesText)
-
-    return TextFieldValue(
-        text = newText,
-        selection = androidx.compose.ui.text.TextRange(lineStart, lineStart + newSelectedLinesText.length)
     )
 }
 
-private fun applyFormatting(
-    currentText: String,
-    selection: androidx.compose.ui.text.TextRange,
-    formatType: String
-): TextFieldValue {
-    val start = selection.start
-    val end = selection.end
+private fun startTemporaryTextCycle(
+    scope: kotlinx.coroutines.CoroutineScope,
+    initialText: String,
+    prefix: String,
+    onUpdate: (TextFieldValue) -> Unit
+): kotlinx.coroutines.Job {
+    val statuses = listOf(
+        "🤖 Generating text, please wait...",
+        "🧠 Thinking...",
+        "Drafting structured sections...",
+        "Formatting beautiful layouts..."
+    )
+    val jokes = listOf(
+        "Why do programmers wear glasses? Because they can't C#!",
+        "There are 10 types of people in the world: those who understand binary, and those who don't.",
+        "How many programmers does it take to change a light bulb? None, that's a hardware problem!",
+        "Why did the database administrator leave the restaurant? There were no joined tables.",
+        "What do you call a group of 8 hobbits? A hobbyte!"
+    )
+    val tips = listOf(
+        "💡 Pro-Tip: You can maximize any diagram to full screen with the zoom icon in the corner!",
+        "💡 Pro-Tip: Use `[Node A] -> [Node B]` to quickly build automatic flowcharts.",
+        "💡 Pro-Tip: Papiro saves everything offline automatically as you type.",
+        "💡 Pro-Tip: Want a quiz? Use the Quiz Generator button to challenge yourself!",
+        "💡 Pro-Tip: You can drag and drop sections easily in Papiro."
+    )
 
-    return when (formatType) {
-        "BOLD" -> {
-            if (start != end) {
-                val selectedText = currentText.substring(start, end)
-                
-                var prefix = ""
-                var contentToFormat = selectedText
-                val headerPrefixes = listOf("### ", "## ", "# ", "- ")
-                for (hp in headerPrefixes) {
-                    if (selectedText.startsWith(hp)) {
-                        prefix = hp
-                        contentToFormat = selectedText.substring(hp.length)
-                        break
-                    }
-                }
+    return scope.launch {
+        var cycle = 0
+        while (true) {
+            val status = statuses[cycle % statuses.size]
+            val joke = jokes[cycle % jokes.size]
+            val tip = tips[cycle % tips.size]
 
-                val (newSelected, _) = toggleInlineFormat(contentToFormat, "**")
-                val replacement = prefix + newSelected
-                val newText = currentText.replaceRange(start, end, replacement)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start, start + replacement.length)
-                )
-            } else {
-                val newText = currentText.substring(0, start) + "****" + currentText.substring(start)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 2)
-                )
-            }
-        }
-        "ITALIC" -> {
-            if (start != end) {
-                val selectedText = currentText.substring(start, end)
-                
-                var prefix = ""
-                var contentToFormat = selectedText
-                val headerPrefixes = listOf("### ", "## ", "# ", "- ")
-                for (hp in headerPrefixes) {
-                    if (selectedText.startsWith(hp)) {
-                        prefix = hp
-                        contentToFormat = selectedText.substring(hp.length)
-                        break
-                    }
-                }
+            val tempMarkdown = """
 
-                val (newSelected, _) = toggleInlineFormat(contentToFormat, "*")
-                val replacement = prefix + newSelected
-                val newText = currentText.replaceRange(start, end, replacement)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start, start + replacement.length)
-                )
-            } else {
-                val newText = currentText.substring(0, start) + "**" + currentText.substring(start)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 1)
-                )
-            }
-        }
-        "CODE" -> {
-            if (start != end) {
-                val selectedText = currentText.substring(start, end)
-                
-                var prefix = ""
-                var contentToFormat = selectedText
-                val headerPrefixes = listOf("### ", "## ", "# ", "- ")
-                for (hp in headerPrefixes) {
-                    if (selectedText.startsWith(hp)) {
-                        prefix = hp
-                        contentToFormat = selectedText.substring(hp.length)
-                        break
-                    }
-                }
+---
+### $status
+*Please hold on while the AI crafts your notes...*
 
-                val (newSelected, _) = toggleInlineFormat(contentToFormat, "{")
-                val replacement = prefix + newSelected
-                val newText = currentText.replaceRange(start, end, replacement)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start, start + replacement.length)
-                )
-            } else {
-                val newText = currentText.substring(0, start) + "{  }" + currentText.substring(start)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 2)
-                )
-            }
+${if (cycle % 2 == 0) "*😄 Here's a tech joke to pass the time:*\n> $joke" else "*$tip*"}
+---
+""".trimIndent()
+
+            val fullText = initialText + prefix + tempMarkdown
+            onUpdate(TextFieldValue(text = fullText, selection = androidx.compose.ui.text.TextRange(fullText.length)))
+
+            cycle++
+            kotlinx.coroutines.delay(2500) // Cycle every 2.5 seconds
         }
-        "LINK" -> {
-            if (start != end) {
-                val selectedText = currentText.substring(start, end)
-                val wrapped = "[$selectedText](https://github.com)"
-                val newText = currentText.replaceRange(start, end, wrapped)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start, start + wrapped.length)
-                )
-            } else {
-                val insert = "[text](https://github.com)"
-                val newText = currentText.substring(0, start) + insert + currentText.substring(start)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 1, start + 5)
-                )
-            }
-        }
-        "H1", "H2", "BULLET" -> {
-            applyBlockFormat(currentText, selection, formatType)
-        }
-        "TEXT_BLOCK" -> {
-            val insert = "\n\n"
-            val newText = currentText.substring(0, start) + insert + currentText.substring(start)
-            TextFieldValue(
-                text = newText,
-                selection = androidx.compose.ui.text.TextRange(start + 2)
-            )
-        }
-        "CODE_BLOCK" -> {
-            if (start != end) {
-                val selectedText = currentText.substring(start, end)
-                val wrapped = "\n```kotlin\n$selectedText\n```\n"
-                val newText = currentText.replaceRange(start, end, wrapped)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + wrapped.length)
-                )
-            } else {
-                val insert = "\n```kotlin\n\n```\n"
-                val newText = currentText.substring(0, start) + insert + currentText.substring(start)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 11)
-                )
-            }
-        }
-        "DIAGRAM" -> {
-            if (start != end) {
-                val selectedText = currentText.substring(start, end)
-                val wrapped = "\n```mermaid\n$selectedText\n```\n"
-                val newText = currentText.replaceRange(start, end, wrapped)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + wrapped.length)
-                )
-            } else {
-                val insert = "\n```mermaid\ngraph TD;\n  A-->B;\n```\n"
-                val newText = currentText.substring(0, start) + insert + currentText.substring(start)
-                TextFieldValue(
-                    text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + 12)
-                )
-            }
-        }
-        else -> TextFieldValue(currentText, selection)
     }
 }
+

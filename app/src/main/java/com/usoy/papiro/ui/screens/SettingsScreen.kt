@@ -45,11 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.usoy.papiro.data.SettingsStore
 import kotlinx.coroutines.launch
+import com.usoy.papiro.viewmodel.NoteViewModel
+
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settingsStore: SettingsStore,
+    viewModel: NoteViewModel,
     onThemeChanged: (String) -> Unit,
     onThemeModeChanged: (String) -> Unit,
     onBack: () -> Unit,
@@ -59,26 +63,20 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     // Expanded / Collapsed section states (Defaulted to false for minimalist clean aesthetic)
-    var isThemeExpanded by remember { mutableStateOf(false) }
     var isAiExpanded by remember { mutableStateOf(false) }
 
     var selectedAppTheme by remember { mutableStateOf(settingsStore.appTheme) }
     var selectedTabMode by remember { mutableStateOf(if (settingsStore.appThemeMode == "DARK") 1 else 0) }
     var provider by remember { mutableStateOf(settingsStore.provider) }
-    var localModelPath by remember { mutableStateOf(settingsStore.localModelPath) }
-    var localMaxTokens by remember { mutableStateOf(settingsStore.localMaxTokens) }
-    var localTemperature by remember { mutableStateOf(settingsStore.localTemperature) }
-    var ollamaBaseUrl by remember { mutableStateOf(settingsStore.ollamaBaseUrl) }
-    var ollamaModel by remember { mutableStateOf(settingsStore.ollamaModel) }
+    var localModelPath by remember { mutableStateOf("") }
+    var localMaxTokens by remember { mutableStateOf(512) }
+    var localTemperature by remember { mutableStateOf(0.7f) }
     var geminiApiKey by remember { mutableStateOf(settingsStore.geminiApiKey) }
     var paperDesign by remember { mutableStateOf(settingsStore.paperDesign) }
-    var isGeminiKeyVisible by remember { mutableStateOf(false) }
+    var ocrStrategy by remember { mutableStateOf(settingsStore.ocrStrategy) }
     
-    var localModelsList by remember { mutableStateOf(settingsStore.localModels) }
     var cloudModelsList by remember { mutableStateOf(settingsStore.cloudModels) }
-    var selectedLocalModel by remember { mutableStateOf(settingsStore.selectedLocalModel) }
     var selectedCloudModel by remember { mutableStateOf(settingsStore.selectedCloudModel) }
-    var newLocalModelInput by remember { mutableStateOf("") }
     var newCloudModelInput by remember { mutableStateOf("") }
     var showGuideDialog by remember { mutableStateOf(false) }
     var activeModelTab by remember { mutableStateOf(0) } // 0 = Local, 1 = Cloud
@@ -87,9 +85,11 @@ fun SettingsScreen(
     var isTestingConnection by remember { mutableStateOf(false) }
     var connectionTestMessage by remember { mutableStateOf<String?>(null) }
     
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+
     LaunchedEffect(connectionTestMessage) {
         connectionTestMessage?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar(it)
             connectionTestMessage = null
         }
     }
@@ -100,13 +100,18 @@ fun SettingsScreen(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
         uri?.let {
-            val path = com.usoy.papiro.util.FileUtils.getPath(context, it) ?: it.toString()
-            localModelPath = path
-            settingsStore.localModelPath = path
+            
+            
+            
+            
+            
+            
+            
         }
     }
 
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
@@ -160,7 +165,7 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { isThemeExpanded = !isThemeExpanded }
+                                
                                 .padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -190,16 +195,10 @@ fun SettingsScreen(
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = if (isThemeExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isThemeExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
-                            )
+                             
                         }
 
-                        AnimatedVisibility(visible = isThemeExpanded) {
+                        
                             Column(
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp)
@@ -420,7 +419,7 @@ fun SettingsScreen(
                                     }
                                 }
                             }
-                        }
+                        
                     }
                 }
             }
@@ -502,9 +501,7 @@ fun SettingsScreen(
 
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     listOf(
-                                        SettingsStore.PROVIDER_GEMINI to "Google Gemini (AI Studio)",
-                                        SettingsStore.PROVIDER_OLLAMA to "Ollama (Local / Termux)",
-                                        SettingsStore.PROVIDER_LOCAL_ON_DEVICE to "Local On-Device task file"
+                                        SettingsStore.PROVIDER_GEMINI to "Google Gemini (Cloud AI Studio)"
                                     ).forEach { (p, label) ->
                                         val isSelected = provider == p
                                         Row(
@@ -530,55 +527,45 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                if (provider == SettingsStore.PROVIDER_OLLAMA) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text("Ollama Configuration", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                                                IconButton(
-                                                    onClick = {
-                                                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                            isTestingConnection = true
-                                                            try {
-                                                                val request = okhttp3.Request.Builder().url(ollamaBaseUrl).get().build()
-                                                                val client = okhttp3.OkHttpClient.Builder()
-                                                                    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                                                                    .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                                                                    .build()
-                                                                val response = client.newCall(request).execute()
-                                                                connectionTestMessage = "Ollama connection: ${response.code} ${response.message}"
-                                                            } catch (e: Exception) {
-                                                                connectionTestMessage = "Connection failed: ${e.message}"
-                                                            } finally {
-                                                                isTestingConnection = false
-                                                            }
-                                                        }
-                                                    }
-                                                ) {
-                                                    Icon(Icons.Default.PlayArrow, contentDescription = "Test Connection", tint = MaterialTheme.colorScheme.primary)
+                                Divider(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                Text(
+                                    text = "Document Extraction (OCR) Strategy",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf(
+                                        "ML_KIT" to "ML Kit + AI Refine (Fast, Local parsing)",
+                                        "GEMINI_VISION" to "Gemini Vision (Cloud, Handles complex layouts)"
+                                    ).forEach { (p, label) ->
+                                        val isSelected = ocrStrategy == p
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    ocrStrategy = p
+                                                    settingsStore.ocrStrategy = p
                                                 }
-                                            }
-                                            
-                                            OutlinedTextField(
-                                                value = ollamaBaseUrl,
-                                                onValueChange = {
-                                                    ollamaBaseUrl = it
-                                                    settingsStore.ollamaBaseUrl = it
-                                                },
-                                                label = { Text("Ollama Base URL") },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                        ) {
+                                            RadioButton(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    ocrStrategy = p
+                                                    settingsStore.ocrStrategy = p
+                                                }
                                             )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
                                         }
                                     }
-                                } else if (provider == SettingsStore.PROVIDER_GEMINI) {
+                                }
+
+                                if (provider == SettingsStore.PROVIDER_GEMINI) {
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
@@ -591,7 +578,6 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             
-                                            var isGeminiKeyVisibleInternal by remember { mutableStateOf(false) }
                                             OutlinedTextField(
                                                 value = geminiApiKey,
                                                 onValueChange = { 
@@ -602,50 +588,29 @@ fun SettingsScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 singleLine = true,
                                                 placeholder = { Text("Enter your Gemini API key") },
-                                                trailingIcon = {
-                                                    IconButton(onClick = { isGeminiKeyVisibleInternal = !isGeminiKeyVisibleInternal }) {
-                                                        Icon(
-                                                            imageVector = if (isGeminiKeyVisibleInternal) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                                            contentDescription = "Toggle Visibility"
-                                                        )
-                                                    }
-                                                },
-                                                visualTransformation = if (isGeminiKeyVisibleInternal) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
                                             )
                                             
-                                            var isTestingGeminiInternal by remember { mutableStateOf(false) }
-                                            var geminiTestMessageInternal by remember { mutableStateOf("") }
+                                            var isTestingGemini by remember { mutableStateOf(false) }
+                                            var geminiTestMessage by remember { mutableStateOf("") }
                                             Button(
                                                 onClick = {
                                                     val keyToTest = geminiApiKey.trim().ifEmpty { com.usoy.papiro.BuildConfig.GEMINI_API_KEY }
                                                     if (keyToTest.isEmpty()) {
-                                                        geminiTestMessageInternal = "API Key cannot be empty."
+                                                        geminiTestMessage = "API Key cannot be empty."
                                                         return@Button
                                                     }
-                                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                        isTestingGeminiInternal = true
-                                                        try {
-                                                            val req = com.usoy.papiro.data.GenerateContentRequest(
-                                                                contents = listOf(com.usoy.papiro.data.Content(parts = listOf(com.usoy.papiro.data.Part(text = "Hello"))))
-                                                            )
-                                                            val res = com.usoy.papiro.data.RetrofitClient.service.generateContent(
-                                                                model = "gemini-3.5-flash",
-                                                                apiKey = keyToTest,
-                                                                request = req
-                                                            )
-                                                            val text = res.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: ""
-                                                            geminiTestMessageInternal = if (text.isNotEmpty()) "Verified successfully!" else "Failed to verify."
-                                                        } catch (e: Exception) {
-                                                            geminiTestMessageInternal = "Error: ${e.message}"
-                                                        } finally {
-                                                            isTestingGeminiInternal = false
-                                                        }
+                                                    scope.launch {
+                                                        isTestingGemini = true
+                                                        val (success, msg) = com.usoy.papiro.data.GeminiService.testApiKey(keyToTest)
+                                                        geminiTestMessage = msg
+                                                        isTestingGemini = false
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                enabled = !isTestingGeminiInternal
+                                                enabled = !isTestingGemini
                                             ) {
-                                                if (isTestingGeminiInternal) {
+                                                if (isTestingGemini) {
                                                     androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     Text("Verifying...")
@@ -653,448 +618,72 @@ fun SettingsScreen(
                                                     Text("Verify API Key")
                                                 }
                                             }
-                                            if (geminiTestMessageInternal.isNotEmpty()) {
+                                            if (geminiTestMessage.isNotEmpty()) {
                                                 Text(
-                                                    text = geminiTestMessageInternal,
-                                                    color = if (geminiTestMessageInternal.contains("successfully")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                                    text = geminiTestMessage,
+                                                    color = if (geminiTestMessage.contains("successfully")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     modifier = Modifier.padding(top = 4.dp)
                                                 )
                                             }
                                         }
                                     }
-                                } else if (provider == SettingsStore.PROVIDER_LOCAL_ON_DEVICE) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            Text("Local LLM Configuration", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-
-                                            OutlinedTextField(
-                                                value = localModelPath,
-                                                onValueChange = {
-                                                    localModelPath = it
-                                                    settingsStore.localModelPath = it
-                                                },
-                                                label = { Text("Local Model File Path") },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                trailingIcon = {
-                                                    IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Add, // You could use a folder icon if you want, but Add works
-                                                            contentDescription = "Pick File"
-                                                        )
-                                                    }
-                                                }
-                                            )
-
-                                            OutlinedTextField(
-                                                value = localMaxTokens.toString(),
-                                                onValueChange = {
-                                                    it.toIntOrNull()?.let { num ->
-                                                        localMaxTokens = num
-                                                        settingsStore.localMaxTokens = num
-                                                    }
-                                                },
-                                                label = { Text("Max Tokens") },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-
-                                            Text(text = "Temperature: ${String.format("%.2f", localTemperature)}", style = MaterialTheme.typography.bodySmall)
-                                            Slider(
-                                                value = localTemperature,
-                                                onValueChange = {
-                                                    localTemperature = it
-                                                    settingsStore.localTemperature = it
-                                                },
-                                                valueRange = 0f..1.5f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                }
-
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = "Model Icon",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "Model Management",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "Select active models or scan your servers to discover successfully connected models.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                TabRow(
-                                    selectedTabIndex = activeModelTab,
-                                    containerColor = Color.Transparent,
-                                    contentColor = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Tab(
-                                        selected = activeModelTab == 0,
-                                        onClick = { activeModelTab = 0 },
-                                        text = { Text("Local Models") },
-                                        icon = { Icon(Icons.Default.Computer, contentDescription = "Local") }
-                                    )
-                                    Tab(
-                                        selected = activeModelTab == 1,
-                                        onClick = { activeModelTab = 1 },
-                                        text = { Text("Cloud Models") },
-                                        icon = { Icon(Icons.Default.Cloud, contentDescription = "Cloud") }
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                if (activeModelTab == 0) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = "Active Local Model: " + if (selectedLocalModel.isEmpty()) "llama3 (Default)" else selectedLocalModel,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.secondary
-                                        )
-
+                                } else if (false) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        // Warning Card
                                         Card(
                                             modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
-                                            ),
-                                            border = CardDefaults.outlinedCardBorder()
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
                                         ) {
-                                            Column(modifier = Modifier.padding(8.dp)) {
-                                                if (localModelsList.isEmpty()) {
-                                                    Text(
-                                                        text = "No local models available. Use the scanner below or add custom tags manually.",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(8.dp)
-                                                    )
-                                                } else {
-                                                    localModelsList.forEach { model ->
-                                                        val isSelected = selectedLocalModel == model
-                                                        Row(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .background(
-                                                                    if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                                                    else Color.Transparent
-                                                                )
-                                                                .clickable {
-                                                                    selectedLocalModel = model
-                                                                    settingsStore.selectedLocalModel = model
-                                                                    settingsStore.ollamaModel = model
-                                                                    ollamaModel = model
-                                                                }
-                                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Row(
-                                                                verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                            ) {
-                                                                RadioButton(
-                                                                    selected = isSelected,
-                                                                    onClick = {
-                                                                        selectedLocalModel = model
-                                                                        settingsStore.selectedLocalModel = model
-                                                                        settingsStore.ollamaModel = model
-                                                                        ollamaModel = model
-                                                                    }
-                                                                )
-                                                                Text(
-                                                                    text = model,
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                                                )
-                                                            }
-                                                            IconButton(
-                                                                onClick = {
-                                                                    val newList = localModelsList.filter { it != model }
-                                                                    localModelsList = newList
-                                                                    settingsStore.localModels = newList
-                                                                    if (selectedLocalModel == model) {
-                                                                        val fallback = newList.firstOrNull() ?: ""
-                                                                        selectedLocalModel = fallback
-                                                                        settingsStore.selectedLocalModel = fallback
-                                                                        settingsStore.ollamaModel = fallback
-                                                                        ollamaModel = fallback
-                                                                    }
-                                                                }
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Delete,
-                                                                    contentDescription = "Remove Model",
-                                                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                                                                    modifier = Modifier.size(18.dp)
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text(
+                                                    text = "⚠️ Advanced & Experimental On-Device AI",
+                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                                Text(
+                                                    text = "On-Device AI runs 100% offline, keeping your documents private on your device. To run models locally, you need a high-end mobile device (such as Google Pixel 8+, Samsung Galaxy S23+) with at least 8GB RAM, and 1.5 GB of free space. Execution speed depends completely on your hardware.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                                                )
                                             }
                                         }
 
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            OutlinedTextField(
-                                                value = newLocalModelInput,
-                                                onValueChange = { newLocalModelInput = it },
-                                                label = { Text("Add Model Tag") },
-                                                placeholder = { Text("e.g. llama3.2:3b") },
-                                                singleLine = true,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Button(
-                                                onClick = {
-                                                    val trimmed = newLocalModelInput.trim()
-                                                    if (trimmed.isNotEmpty() && !localModelsList.contains(trimmed)) {
-                                                        val newList = localModelsList + trimmed
-                                                        localModelsList = newList
-                                                        settingsStore.localModels = newList
-                                                        newLocalModelInput = ""
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Icon(Icons.Default.Add, contentDescription = "Add")
-                                            }
-                                        }
-
-                                         Row(
-                                             modifier = Modifier.fillMaxWidth(),
-                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                         ) {
-                                             Button(
-                                                 onClick = {
-                                                     val defaults = listOf("llama3", "llama3.2:1b", "qwen2.5:1.5b-instruct")
-                                                     localModelsList = defaults
-                                                     settingsStore.localModels = defaults
-                                                     selectedLocalModel = "llama3"
-                                                     settingsStore.selectedLocalModel = "llama3"
-                                                     settingsStore.ollamaModel = "llama3"
-                                                     ollamaModel = "llama3"
-                                                     connectionTestMessage = "Reset to local Ollama defaults!"
-                                                 },
-                                                 modifier = Modifier.weight(1f),
-                                                 colors = ButtonDefaults.buttonColors(
-                                                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                                 ),
-                                                 shape = RoundedCornerShape(8.dp)
-                                             ) {
-                                                 Icon(Icons.Default.Delete, contentDescription = "Reset", modifier = Modifier.size(18.dp))
-                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                 Text("Reset Defaults")
-                                             }
-
-                                             Button(
-                                                 onClick = {
-                                                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                         isFetchingModels = true
-                                                         try {
-                                                             val baseUrl = settingsStore.ollamaBaseUrl.trim().ifEmpty { "http://localhost:11434" }
-                                                             val url = if (baseUrl.endsWith("/")) "${baseUrl}api/tags" else "$baseUrl/api/tags"
-                                                             val request = okhttp3.Request.Builder().url(url).get().build()
-                                                             val client = okhttp3.OkHttpClient.Builder()
-                                                                 .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                                                                 .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                                                                 .build()
-                                                             
-                                                             val response = client.newCall(request).execute()
-                                                             if (response.isSuccessful) {
-                                                                 val body = response.body?.string() ?: ""
-                                                                 val json = org.json.JSONObject(body)
-                                                                 val modelsArray = json.optJSONArray("models")
-                                                                 val fetched = mutableListOf<String>()
-                                                                 if (modelsArray != null) {
-                                                                     for (i in 0 until modelsArray.length()) {
-                                                                         val mObj = modelsArray.getJSONObject(i)
-                                                                         val name = mObj.optString("name")
-                                                                         if (name.isNotEmpty()) {
-                                                                             fetched.add(name)
-                                                                         }
-                                                                     }
-                                                                 }
-                                                                 if (fetched.isNotEmpty()) {
-                                                                     val combined = (localModelsList + fetched).distinct()
-                                                                     localModelsList = combined
-                                                                     settingsStore.localModels = combined
-                                                                     connectionTestMessage = "Discovered ${fetched.size} Ollama models!"
-                                                                 } else {
-                                                                     connectionTestMessage = "Connected to Ollama successfully, but found no downloaded models."
-                                                                 }
-                                                             } else {
-                                                                 connectionTestMessage = "Ollama returned error code ${response.code}"
-                                                             }
-                                                         } catch (e: Exception) {
-                                                             connectionTestMessage = "Could not reach Ollama server: ${e.localizedMessage}"
-                                                         } finally {
-                                                             isFetchingModels = false
-                                                         }
-                                                     }
-                                                 },
-                                                 modifier = Modifier.weight(1.1f),
-                                                 colors = ButtonDefaults.buttonColors(
-                                                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                                 ),
-                                                 shape = RoundedCornerShape(8.dp)
-                                             ) {
-                                                 if (isFetchingModels) {
-                                                     CircularProgressIndicator(
-                                                         modifier = Modifier.size(18.dp),
-                                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                         strokeWidth = 2.dp
-                                                     )
-                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                     Text("Scanning...")
-                                                 } else {
-                                                     Icon(Icons.Default.Refresh, contentDescription = "Scan", modifier = Modifier.size(18.dp))
-                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                     Text("Scan Ollama")
-                                                 }
-                                             }
-                                         }
-                                    }
-                                } else {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        // Recommended download models
                                         Text(
-                                            text = "Active Cloud Model: " + if (selectedCloudModel.isEmpty()) "gpt-4o-mini (Default)" else selectedCloudModel,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            text = "Download Recommended Models",
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.secondary
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = 4.dp)
                                         )
 
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
-                                            ),
-                                            border = CardDefaults.outlinedCardBorder()
-                                        ) {
-                                            Column(modifier = Modifier.padding(8.dp)) {
-                                                if (cloudModelsList.isEmpty()) {
-                                                    Text(
-                                                        text = "No cloud models available. Add custom IDs manually.",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(8.dp)
-                                                    )
-                                                } else {
-                                                     val handleModelSelect = { model: String ->
-                                                         selectedCloudModel = model
-                                                         settingsStore.selectedCloudModel = model
-                                                     }
-
-                                                    cloudModelsList.forEach { model ->
-                                                        val isSelected = selectedCloudModel == model
-                                                        Row(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .background(
-                                                                    if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                                                    else Color.Transparent
-                                                                )
-                                                                .clickable { handleModelSelect(model) }
-                                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Row(
-                                                                verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                            ) {
-                                                                RadioButton(
-                                                                    selected = isSelected,
-                                                                    onClick = { handleModelSelect(model) }
-                                                                )
-                                                                Text(
-                                                                    text = model,
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                                                )
-                                                            }
-                                                            IconButton(
-                                                                onClick = {
-                                                                    val newList = cloudModelsList.filter { it != model }
-                                                                    cloudModelsList = newList
-                                                                    settingsStore.cloudModels = newList
-                                                                     if (selectedCloudModel == model) {
-                                                                         val fallback = newList.firstOrNull() ?: ""
-                                                                         selectedCloudModel = fallback
-                                                                         settingsStore.selectedCloudModel = fallback
-                                                                     }
-                                                                }
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Delete,
-                                                                    contentDescription = "Remove Model",
-                                                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                                                                    modifier = Modifier.size(18.dp)
-                                                                )
-                                                            }
-                                                        }
-                                                    }
+                                        // Configuration section
+                                        OutlinedTextField(
+                                            value = localMaxTokens.toString(),
+                                            onValueChange = {
+                                                it.toIntOrNull()?.let { num ->
+                                                    
+                                                    
                                                 }
-                                            }
-                                        }
+                                            },
+                                            label = { Text("Max Tokens") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
 
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            OutlinedTextField(
-                                                value = newCloudModelInput,
-                                                onValueChange = { newCloudModelInput = it },
-                                                label = { Text("Add Model ID") },
-                                                placeholder = { Text("e.g. gpt-4o-mini") },
-                                                singleLine = true,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Button(
-                                                onClick = {
-                                                    val trimmed = newCloudModelInput.trim()
-                                                    if (trimmed.isNotEmpty() && !cloudModelsList.contains(trimmed)) {
-                                                        val newList = cloudModelsList + trimmed
-                                                        cloudModelsList = newList
-                                                        settingsStore.cloudModels = newList
-                                                        newCloudModelInput = ""
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Icon(Icons.Default.Add, contentDescription = "Add")
-                                            }
-                                        }
-
+                                        Text(text = "Temperature: ${String.format("%.2f", localTemperature)}", style = MaterialTheme.typography.bodySmall)
+                                        Slider(
+                                            value = localTemperature,
+                                            onValueChange = {
+                                                
+                                                
+                                            },
+                                            valueRange = 0f..1.5f,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
                                     }
                                 }
                             }
@@ -1118,43 +707,10 @@ fun SettingsScreen(
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     item {
                         Text("1. Google AI Studio (Gemini API)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("Get a free API key from Google AI Studio to use the latest Gemini models like gemini-3.5-flash and gemini-3.1-pro-preview directly.", style = MaterialTheme.typography.bodySmall)
+                        Text("Get a free API key from Google AI Studio to use the latest Gemini models like gemini-1.5-flash, gemini-2.5-flash and gemini-3.1-flash-lite directly.", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(4.dp))
                         Button(onClick = { uriHandler.openUri("https://aistudio.google.com/app/apikey") }) {
                             Text("Get Gemini API Key")
-                        }
-                    }
-                    item {
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("2. Local Ollama (via Termux on Android)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("Run models entirely offline on your phone.", style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { uriHandler.openUri("https://f-droid.org/packages/com.termux/") }) {
-                            Text("Download Termux (F-Droid)")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Termux Setup Commands (Click to copy):", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                        
-                        val cmds = listOf(
-                            "pkg update && pkg upgrade -y",
-                            "pkg install ollama -y",
-                            "nohup ollama serve &",
-                            "ollama run qwen2.5:0.5b"
-                        )
-                        
-                        cmds.forEach { cmd ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().clickable { clipboardManager.setText(AnnotatedString(cmd)) },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            ) {
-                                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(cmd, style = MaterialTheme.typography.bodySmall, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
                 }

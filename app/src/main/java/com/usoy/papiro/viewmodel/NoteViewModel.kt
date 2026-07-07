@@ -1,6 +1,5 @@
 package com.usoy.papiro.viewmodel
 
-import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -13,6 +12,7 @@ import com.usoy.papiro.data.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,11 +23,11 @@ class NoteViewModel(
     private val repository: NoteRepository,
     private val context: Context
 ) : ViewModel() {
-
     private val TAG = "NoteViewModel"
-    val settingsStore = SettingsStore(context)
 
-    // Exposed flows
+    val settingsStore = SettingsStore(context)
+    private val documentRepo = com.usoy.papiro.data.DocumentExtractionRepository(settingsStore)
+
     val allNotes: StateFlow<List<NoteEntity>> = repository.allNotes
         .stateIn(
             scope = viewModelScope,
@@ -41,98 +41,70 @@ class NoteViewModel(
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
+    private val _uiEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    val uiEvent = _uiEvent.asSharedFlow()
+
     private val _isOcrRunning = MutableStateFlow(false)
     val isOcrRunning: StateFlow<Boolean> = _isOcrRunning.asStateFlow()
-
-    // RAM usage checking for local LLM safeguard
-    data class RamStatus(
-        val availableGb: Double,
-        val totalGb: Double,
-        val isLowMemory: Boolean,
-        val percentageAvailable: Int
-    )
-
-    private val _ramStatus = MutableStateFlow<RamStatus?>(null)
-    val ramStatus: StateFlow<RamStatus?> = _ramStatus.asStateFlow()
-
-    init {
-        checkSystemRam()
-    }
-
-    fun checkSystemRam() {
-        try {
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val memoryInfo = ActivityManager.MemoryInfo()
-            activityManager.getMemoryInfo(memoryInfo)
-
-            val availGb = memoryInfo.availMem / (1024.0 * 1024.0 * 1024.0)
-            val totalGb = memoryInfo.totalMem / (1024.0 * 1024.0 * 1024.0)
-            val pct = ((availGb / totalGb) * 100).toInt()
-
-            _ramStatus.value = RamStatus(
-                availableGb = String.format("%.2f", availGb).toDouble(),
-                totalGb = String.format("%.2f", totalGb).toDouble(),
-                isLowMemory = memoryInfo.lowMemory || availGb < 1.5, // Alert if under 1.5GB free
-                percentageAvailable = pct
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to inspect RAM availability", e)
-        }
-    }
 
     fun selectNote(note: NoteEntity?) {
         _currentNote.value = note
     }
 
-    fun createNewNote() {
-        _currentNote.value = NoteEntity(
-            title = "",
-            content = "",
-            backgroundType = settingsStore.paperDesign
-        )
-    }
-
-    fun saveNote(title: String, content: String, backgroundType: String, imagePath: String? = null) {
-        val current = _currentNote.value ?: return
-        viewModelScope.launch {
-            val updated = current.copy(
-                title = title.ifEmpty { "Untitled Note" },
-                content = content,
-                backgroundType = backgroundType,
-                imagePath = imagePath,
-                timestamp = System.currentTimeMillis()
-            )
-            val newId = repository.insert(updated)
-            val finalId = if (updated.id == 0L) newId else updated.id
-            val finalNote = updated.copy(id = finalId)
-            _currentNote.value = finalNote
-
-            if (content.trim().isNotEmpty()) {
-                repository.insertHistory(
-                    com.usoy.papiro.data.NoteHistoryEntity(
-                        noteId = finalId,
-                        content = content,
-                        timestamp = System.currentTimeMillis()
-                    )
-                )
+    fun createNewNote(onCreated: (NoteEntity) -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val newNote = NoteEntity(title = "", content = "", backgroundType = settingsStore.paperDesign, timestamp = System.currentTimeMillis())
+            val id = repository.insert(newNote)
+            val insertedNote = newNote.copy(id = id)
+            withContext(Dispatchers.Main) {
+                _currentNote.value = insertedNote
+                onCreated(insertedNote)
             }
         }
     }
 
-    fun deleteNote(noteId: Long) {
-        viewModelScope.launch {
-            repository.deleteById(noteId)
-            if (_currentNote.value?.id == noteId) {
-                _currentNote.value = null
+    fun saveNote(title: String, content: String, backgroundType: String) {
+        val current = _currentNote.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = current.copy(title = title, content = content, backgroundType = backgroundType, timestamp = System.currentTimeMillis())
+            repository.insert(updated)
+            withContext(Dispatchers.Main) {
+                _currentNote.value = updated
+            }
+        }
+    }
+
+    fun deleteNotes(ids: Set<Long>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            ids.forEach { repository.deleteById(it) }
+            withContext(Dispatchers.Main) {
+                if (_currentNote.value?.id in ids) {
+                    _currentNote.value = null
+                }
+            }
+        }
+    }
+
+    fun deleteNote(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteById(id)
+            withContext(Dispatchers.Main) {
+                if (_currentNote.value?.id == id) {
+                    _currentNote.value = null
+                }
             }
         }
     }
 
     fun generateAiNotes(topic: String, existingContent: String = "", onComplete: (String) -> Unit) {
         if (topic.trim().isEmpty()) return
+        if (_isGenerating.value) {
+            viewModelScope.launch {
+                _uiEvent.emit("An AI generation is already in progress. Please wait for it to complete.")
+            }
+            return
+        }
         _isGenerating.value = true
-        checkSystemRam() // update memory status before running heavy generation
-
         val targetNote = _currentNote.value
 
         com.usoy.papiro.util.AppCoroutineScope.launch {
@@ -144,7 +116,6 @@ class NoteViewModel(
                     if (currentlyEditing != null && currentlyEditing.id == targetNote?.id) {
                         onComplete(generatedMarkdown)
                     } else {
-                        // The user has navigated away; save the generated note directly to the database so it's not lost
                         val mergedContent = if (existingContent.isNotEmpty()) {
                             if (existingContent.endsWith("\n")) existingContent + generatedMarkdown else "$existingContent\n\n$generatedMarkdown"
                         } else {
@@ -178,28 +149,76 @@ class NoteViewModel(
                 Log.e(TAG, "Failed local generation in app-scope", e)
                 withContext(Dispatchers.Main) {
                     _isGenerating.value = false
+                    _uiEvent.emit("Error generating note: ${e.message}")
                 }
             }
         }
     }
 
-    fun extractTextFromImage(imageBytes: ByteArray, onComplete: (String) -> Unit) {
+    fun generateCustomPrompt(prompt: String, onComplete: (String) -> Unit) {
+        if (prompt.trim().isEmpty()) return
+        if (_isGenerating.value) {
+            viewModelScope.launch {
+                _uiEvent.emit("An AI generation is already in progress. Please wait for it to complete.")
+            }
+            return
+        }
+        _isGenerating.value = true
+        com.usoy.papiro.util.AppCoroutineScope.launch {
+            try {
+                val generated = GeminiService.generateCustomContent(context, prompt, settingsStore)
+                withContext(Dispatchers.Main) {
+                    _isGenerating.value = false
+                    onComplete(generated)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Generate custom prompt failed", e)
+                withContext(Dispatchers.Main) {
+                    _isGenerating.value = false
+                    _uiEvent.emit("Error generating custom content: ${e.message}")
+                }
+            }
+        }
+    }
+    
+    fun extractTextFromDocument(context: Context, uri: android.net.Uri, onComplete: (String) -> Unit) {
+        if (_isOcrRunning.value) {
+            viewModelScope.launch {
+                _uiEvent.emit("OCR extraction is already in progress. Please wait.")
+            }
+            return
+        }
         _isOcrRunning.value = true
         viewModelScope.launch {
-            try {
-                val ocrResult = GeminiService.performOcr(imageBytes, settingsStore)
-                onComplete(ocrResult)
-            } catch (e: Exception) {
-                Log.e(TAG, "OCR failed", e)
-                onComplete("Failed to extract text from image: ${e.localizedMessage}")
-            } finally {
-                _isOcrRunning.value = false
+            val result = documentRepo.extractTextFromDocument(context, uri)
+            onComplete(result)
+            _isOcrRunning.value = false
+        }
+    }
+
+    fun extractTextFromImage(imageBytes: ByteArray, onComplete: (String) -> Unit) {
+        if (_isOcrRunning.value) {
+            viewModelScope.launch {
+                _uiEvent.emit("OCR extraction is already in progress. Please wait.")
             }
+            return
+        }
+        _isOcrRunning.value = true
+        viewModelScope.launch {
+            val result = documentRepo.extractTextFromImage(context, imageBytes)
+            onComplete(result)
+            _isOcrRunning.value = false
         }
     }
 
     fun generateTableOfContents(content: String, onComplete: (String) -> Unit) {
         if (content.trim().isEmpty()) return
+        if (_isGenerating.value) {
+            viewModelScope.launch {
+                _uiEvent.emit("An AI generation is already in progress. Please wait for it to complete.")
+            }
+            return
+        }
         _isGenerating.value = true
         val targetNote = _currentNote.value
 
@@ -212,7 +231,6 @@ class NoteViewModel(
                     if (currentlyEditing != null && currentlyEditing.id == targetNote?.id) {
                         onComplete(toc)
                     } else if (targetNote != null) {
-                        // User navigated away; prepend the table of contents to the note content and save to database
                         val updatedContent = if (toc.isNotEmpty()) "$toc\n\n${targetNote.content}" else targetNote.content
                         val noteToSave = targetNote.copy(
                             content = updatedContent,
@@ -227,6 +245,7 @@ class NoteViewModel(
                 Log.e(TAG, "TOC failed in app-scope", e)
                 withContext(Dispatchers.Main) {
                     _isGenerating.value = false
+                    _uiEvent.emit("Error generating table of contents: ${e.message}")
                 }
             }
         }
@@ -234,9 +253,14 @@ class NoteViewModel(
 
     fun enhanceNote(content: String, onComplete: (String) -> Unit) {
         if (content.trim().isEmpty()) return
+        if (_isGenerating.value) {
+            viewModelScope.launch {
+                _uiEvent.emit("An AI generation is already in progress. Please wait for it to complete.")
+            }
+            return
+        }
         _isGenerating.value = true
         val targetNote = _currentNote.value
-
         com.usoy.papiro.util.AppCoroutineScope.launch {
             try {
                 val enhanced = GeminiService.enhanceNoteContent(context, content, settingsStore)
@@ -246,7 +270,6 @@ class NoteViewModel(
                     if (currentlyEditing != null && currentlyEditing.id == targetNote?.id) {
                         onComplete(enhanced)
                     } else if (targetNote != null) {
-                        // User navigated away; update with enhanced content directly to the database
                         val noteToSave = targetNote.copy(
                             content = enhanced,
                             timestamp = System.currentTimeMillis()
@@ -260,6 +283,7 @@ class NoteViewModel(
                 Log.e(TAG, "Enhance failed in app-scope", e)
                 withContext(Dispatchers.Main) {
                     _isGenerating.value = false
+                    _uiEvent.emit("Error enhancing content: ${e.message}")
                 }
             }
         }
@@ -280,6 +304,69 @@ class NoteViewModel(
 
     fun getHistoryForNote(noteId: Long): kotlinx.coroutines.flow.Flow<List<com.usoy.papiro.data.NoteHistoryEntity>> {
         return repository.getHistoryForNote(noteId)
+    }
+
+    fun generateTitleIfEmpty(currentTitle: String, content: String, onComplete: (String) -> Unit) {
+        if (currentTitle.trim().isNotEmpty() && currentTitle.trim() != "Untitled Note") {
+            onComplete(currentTitle)
+            return
+        }
+        if (content.trim().isEmpty()) {
+            onComplete("Untitled Note")
+            return
+        }
+        
+        com.usoy.papiro.util.AppCoroutineScope.launch {
+            try {
+                val generatedTitle = GeminiService.generateTitle(context, content, settingsStore)
+                withContext(Dispatchers.Main) {
+                    onComplete(generatedTitle.ifEmpty { "Untitled Note" })
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Generate title failed", e)
+                withContext(Dispatchers.Main) {
+                    _uiEvent.emit("Error generating title: ${e.message}")
+                    onComplete("Untitled Note")
+                }
+            }
+        }
+    }
+
+    fun updateExistingToc(content: String): String {
+        val lines = content.split("\n")
+        val tocLines = mutableListOf<String>()
+        var hasHeaders = false
+        
+        for (line in lines) {
+            if (line.startsWith("#")) {
+                val level = line.takeWhile { it == '#' }.length
+                val name = line.substring(level).trim()
+                if (name.equals("TABLE OF CONTENTS", ignoreCase = true)) continue
+                hasHeaders = true
+                val link = name.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9-]"), "")
+                val indent = "  ".repeat(maxOf(0, level - 2))
+                tocLines.add("$indent- [$name](#$link)")
+            }
+        }
+        
+        if (!hasHeaders) return content
+        
+        val newTocBlock = buildString {
+            append("# TABLE OF CONTENTS\n\n")
+            tocLines.forEach { append(it).append("\n") }
+            append("\n")
+        }
+        
+        val tocIndex = content.indexOf("# TABLE OF CONTENTS", ignoreCase = true)
+        if (tocIndex != -1) {
+            val nextHeadingIndex = content.indexOf("\n#", tocIndex + "# TABLE OF CONTENTS".length)
+            if (nextHeadingIndex != -1) {
+                return content.substring(0, tocIndex) + newTocBlock + content.substring(nextHeadingIndex + 1)
+            } else {
+                return content.substring(0, tocIndex) + newTocBlock
+            }
+        }
+        return content
     }
 }
 

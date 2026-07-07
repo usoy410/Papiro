@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#121212">
+
+    <!-- Top Bar Toolbar -->
+    <RelativeLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#1E1E1E"
+        android:paddingHorizontal="16dp">
+
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_back_arrow"
+            android:contentDescription="Go back" />
+
+        <TextView
+            android:id="@+id/txt_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Papiro Sketchpad"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_finish"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:text="Finish"
+            android:textColor="#2196F3"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <!-- Main workspace wrapper to allow overlays -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Drawing Area (Custom DrawingView inside a ScrollView) -->
+        <ScrollView
+            android:id="@+id/scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:background="#121212">
+
+            <com.usoy.papiro.ui.components.DrawingView
+                android:id="@+id/drawing_view"
+                android:layout_width="match_parent"
+                android:layout_height="1200dp" />
+        </ScrollView>
+
+        <!-- Floating Left Color Palette Control (Aligned to bottom-left on top of the bottom bar) -->
+        <LinearLayout
+            android:id="@+id/floating_color_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start|bottom"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:padding="8dp"
+            android:background="@drawable/floating_panel_background"
+            android:elevation="6dp"
+            android:visibility="gone">
+
+            <View
+                android:id="@+id/color_white"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <View
+                android:id="@+id/color_red"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <View
+                android:id="@+id/color_blue"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <View
+                android:id="@+id/color_green"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <View
+                android:id="@+id/color_yellow"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <View
+                android:id="@+id/color_orange"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <View
+                android:id="@+id/color_purple"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp" />
+
+            <!-- Custom Color Picker Icon Button inside vertical palette -->
+            <ImageButton
+                android:id="@+id/color_custom_picker"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginVertical="6dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_color_lens"
+                android:scaleType="fitCenter"
+                android:padding="6dp"
+                android:contentDescription="Custom Color Picker" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Bottom Toolbars Area -->
+    <LinearLayout
+        android:id="@+id/bottom_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#1E1E1E"
+        android:paddingVertical="12dp"
+        android:paddingHorizontal="16dp">
+
+        <!-- Inline Brush Size Slider + Color Toggle (Borderless container, decorated dynamically in Kotlin) -->
+        <LinearLayout
+            android:id="@+id/brush_size_slider_container"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:paddingHorizontal="12dp">
+
+            <!-- Active Color Indicator Button (Always visible on the left side of the seekbar) -->
+            <FrameLayout
+                android:id="@+id/btn_active_color_indicator"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true">
+
+                <View
+                    android:id="@+id/active_color_circle"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/img_brush_preview_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="4dp"
+                android:src="@drawable/ic_stroke_thickness"
+                android:contentDescription="Brush Size"
+                android:tint="#B0FFFFFF" />
+
+            <SeekBar
+                android:id="@+id/brush_size_seekbar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="46"
+                android:progress="6" />
+
+            <TextView
+                android:id="@+id/txt_brush_size_val"
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical|end"
+                android:text="10 dp"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Controls/Toggles Row -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:scrollbars="none"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp">
+
+                <!-- Undo -->
+                <ImageButton
+                    android:id="@+id/btn_undo"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_undo"
+                    android:contentDescription="Undo" />
+
+                <!-- Redo -->
+                <ImageButton
+                    android:id="@+id/btn_redo"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_redo"
+                    android:contentDescription="Redo" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="#444444" />
+
+                <!-- Pen Tool (Default ON) -->
+                <ImageButton
+                    android:id="@+id/btn_tool_pen"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_pen"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Pen Tool" />
+
+                <!-- Smart Shape Toggle -->
+                <ImageButton
+                    android:id="@+id/btn_smart_shape"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_smart_shape"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Smart Shape" />
+
+                <!-- Eraser Tool -->
+                <ImageButton
+                    android:id="@+id/btn_tool_eraser"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_eraser"
+                    android:padding="9dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Eraser Tool" />
+
+                <!-- Stroke Thickness Selection -->
+                <ImageButton
+                    android:id="@+id/btn_stroke_thickness"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_stroke_thickness"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Stroke Thickness" />
+
+                <!-- Color Picker -->
+                <ImageButton
+                    android:id="@+id/btn_color_picker"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_color_lens"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Color Picker" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="#444444" />
+
+                <!-- Finger Painting Toggle -->
+                <ImageButton
+                    android:id="@+id/btn_finger_painting"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_finger_drawing"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Finger Painting" />
+
+                <!-- Grid Guideline Toggle -->
+                <ImageButton
+                    android:id="@+id/btn_grid_type"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_grid"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Grid Guidelines" />
+
+            </LinearLayout>
+        </HorizontalScrollView>
+    </LinearLayout>
+
+</LinearLayout>

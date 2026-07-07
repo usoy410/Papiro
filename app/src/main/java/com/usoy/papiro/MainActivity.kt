@@ -41,6 +41,10 @@ class MainActivity : ComponentActivity() {
             var currentTheme by remember { mutableStateOf(settingsStore.appTheme) }
             var currentThemeMode by remember { mutableStateOf(settingsStore.appThemeMode) }
 
+            var currentScreen by remember { mutableStateOf(Screen.LIST) }
+            var uploadPreselectedMode by remember { mutableStateOf("Note") }
+            val currentNote by viewModel.currentNote.collectAsState()
+
             val systemInDarkTheme = isSystemInDarkTheme()
             val isDarkTheme = when (currentThemeMode) {
                 "DARK" -> true
@@ -50,10 +54,6 @@ class MainActivity : ComponentActivity() {
 
             PapiroTheme(themeName = currentTheme, darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    var currentScreen by remember { mutableStateOf(Screen.LIST) }
-
-                    // Sync currentScreen with ViewModel's active note
-                    val currentNote by viewModel.currentNote.collectAsState()
 
                     BackHandler(enabled = currentScreen != Screen.LIST) {
                         if (currentScreen == Screen.EDITOR) {
@@ -77,7 +77,8 @@ class MainActivity : ComponentActivity() {
                                 onSettingsClick = {
                                     currentScreen = Screen.SETTINGS
                                 },
-                                onUploadDocumentClick = {
+                                onUploadDocumentClick = { mode ->
+                                    uploadPreselectedMode = mode
                                     currentScreen = Screen.UPLOAD
                                 }
                             )
@@ -93,6 +94,7 @@ class MainActivity : ComponentActivity() {
                         Screen.SETTINGS -> {
                             SettingsScreen(
                                 settingsStore = settingsStore,
+                                viewModel = viewModel,
                                 onThemeChanged = { newTheme ->
                                     currentTheme = newTheme
                                 },
@@ -107,6 +109,7 @@ class MainActivity : ComponentActivity() {
                         Screen.UPLOAD -> {
                             UploadDocumentScreen(
                                 viewModel = viewModel,
+                                initialMode = uploadPreselectedMode,
                                 onNoteExtracted = { note ->
                                     currentScreen = Screen.EDITOR
                                 },
