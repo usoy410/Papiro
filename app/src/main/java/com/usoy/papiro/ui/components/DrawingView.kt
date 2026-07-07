@@ -281,20 +281,9 @@ class DrawingView @JvmOverloads constructor(
         val isDrawingAllowed = isFingerPaintingEnabled || isCurrentTouchStylus
 
         if (!isDrawingAllowed) {
-            when (action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastRawY = event.rawY
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val currentRawY = event.rawY
-                    val deltaY = (lastRawY - currentRawY).toInt()
-                    (parent as? android.view.View)?.scrollBy(0, deltaY)
-                    lastRawY = currentRawY
-                }
-            }
             showTouchIndicator = false
-            return true
+            parent?.requestDisallowInterceptTouchEvent(false)
+            return false
         }
 
         // Clamped X coordinate to keep drawing strictly within the canvas/screen boundaries
