@@ -272,10 +272,12 @@ class DrawingView @JvmOverloads constructor(
         val toolType = if (event.pointerCount > 0) event.getToolType(0) else MotionEvent.TOOL_TYPE_UNKNOWN
         isCurrentTouchStylus = toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER
 
-        // Restrict drawing to inside left and right margins (16dp gutter) to prevent drawing on the outer edges
+        // Restrict drawing to inside left, right, top, and bottom margins (16dp gutter) to prevent drawing on the outer edges
         val margin = 16f * resources.displayMetrics.density
         val minAllowedX = margin
         val maxAllowedX = width - margin
+        val minAllowedY = margin
+        val maxAllowedY = height - margin
 
         // Stylus can always draw even if finger drawing is disabled!
         val isDrawingAllowed = isFingerPaintingEnabled || isCurrentTouchStylus
@@ -286,14 +288,15 @@ class DrawingView @JvmOverloads constructor(
             return false
         }
 
-        // Clamped X coordinate to keep drawing strictly within the canvas/screen boundaries
+        // Clamped X and Y coordinates to keep drawing strictly within the canvas/screen boundaries
         val clampedX = x.coerceIn(minAllowedX, maxAllowedX)
+        val clampedY = y.coerceIn(minAllowedY, maxAllowedY)
 
         // Update brush preview location and visibility safely using masked actions
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
             showTouchIndicator = true
             touchX = clampedX
-            touchY = y
+            touchY = clampedY
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_POINTER_UP) {
             showTouchIndicator = false
         }
@@ -301,37 +304,26 @@ class DrawingView @JvmOverloads constructor(
         // Disallow ScrollView intercepting touches
         parent?.requestDisallowInterceptTouchEvent(true)
 
-        // Check if drawing near the bottom edge, expand view height if so
-        if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_DOWN) {
-            if (y > height - 150f) {
-                val newHeight = height + 300
-                layoutParams?.let {
-                    it.height = newHeight
-                    requestLayout()
-                }
-            }
-        }
-
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 redoPaths.clear()
                 val path = Path()
-                path.moveTo(clampedX, y)
+                path.moveTo(clampedX, clampedY)
                 currentPath = path
                 currentPoints.clear()
-                currentPoints.add(PointF(clampedX, y))
+                currentPoints.add(PointF(clampedX, clampedY))
                 lastX = clampedX
-                lastY = y
+                lastY = clampedY
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = abs(clampedX - lastX)
-                val dy = abs(y - lastY)
+                val dy = abs(clampedY - lastY)
                 if (dx >= touchTolerance || dy >= touchTolerance) {
-                    currentPath?.quadTo(lastX, lastY, (clampedX + lastX) / 2, (y + lastY) / 2)
-                    currentPoints.add(PointF(clampedX, y))
+                    currentPath?.quadTo(lastX, lastY, (clampedX + lastX) / 2, (clampedY + lastY) / 2)
+                    currentPoints.add(PointF(clampedX, clampedY))
                     lastX = clampedX
-                    lastY = y
+                    lastY = clampedY
                 }
                 invalidate()
             }
@@ -340,11 +332,11 @@ class DrawingView @JvmOverloads constructor(
                 if (currentPoints.size == 1) {
                     // Force a tiny line segment (0.5dp) to render a perfect circular cap dot
                     val tinyShift = 0.5f * resources.displayMetrics.density
-                    currentPath?.lineTo(clampedX + tinyShift, y)
-                    currentPoints.add(PointF(clampedX + tinyShift, y))
+                    currentPath?.lineTo(clampedX + tinyShift, clampedY)
+                    currentPoints.add(PointF(clampedX + tinyShift, clampedY))
                 } else {
-                    currentPath?.lineTo(clampedX, y)
-                    currentPoints.add(PointF(clampedX, y))
+                    currentPath?.lineTo(clampedX, clampedY)
+                    currentPoints.add(PointF(clampedX, clampedY))
                 }
                 
                 val finalPath = currentPath
