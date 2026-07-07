@@ -43,11 +43,9 @@ object GeminiService {
         4. Detailed code blocks with syntax for technical topics, or mathematical formulas (using standard markdown LaTeX blocks if helpful).
         5. Visualizations:
            - Use DIAGRAMS (standard Mermaid inside ```mermaid blocks) for structured flowcharts, sequence diagrams, process flows, state diagrams, timelines, organizational charts, or hierarchical trees. IMPORTANT: ALWAYS enclose node text with parenthesis or special characters inside double quotes (e.g., `A["Text (with parens)"]`) to prevent Mermaid parse errors.
-           - Use DRAWINGS (drawing code blocks enclosing DrawingData JSON) for hand-drawn styled illustrations, creative line art, free-form geometric figures, labeled anatomical sketches, chemical molecules, or organic diagrams that cannot be expressed as standard text charts.
         6. Keep it educational, engaging, and rich in depth. CRITICAL: Output ONLY the Markdown note itself. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the note', 'Pro tip:', 'Let me know', etc.).
         7. CRITICAL MARKDOWN LIST FORMATTING: Never use asterisks (`*`) or plus signs (`+`) for markdown bullet lists/points. Always use a single hyphen followed by exactly one space.
         8. CUSTOM MARKDOWN TABLE STYLING AND COLORING: Whenever generating tables, you MUST utilize the app's advanced metadata comment tag in the VERY FIRST cell.
-        9. ILLUSTRATION/LINE ART GENERATION (drawing CODE BLOCKS).
     """
 
     private fun getReadableErrorMessage(e: Throwable): String {
