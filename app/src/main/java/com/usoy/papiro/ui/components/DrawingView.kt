@@ -83,6 +83,17 @@ class DrawingView @JvmOverloads constructor(
 
     // Canvas Background Color (dark, e.g. #121212)
     var canvasBackgroundColor = Color.parseColor("#121212")
+        set(value) {
+            field = value
+            setBackgroundColor(value)
+            // Update the paint colors for all eraser paths so they match the new background!
+            for (drawnPath in paths) {
+                if (drawnPath.isEraser) {
+                    drawnPath.paint.color = value
+                }
+            }
+            invalidate()
+        }
 
     // ML Kit Digital Ink Recognition
     private var recognizer: DigitalInkRecognizer? = null

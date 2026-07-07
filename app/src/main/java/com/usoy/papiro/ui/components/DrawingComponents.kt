@@ -77,7 +77,8 @@ data class SaveResult(
 data class DrawPath(
     val color: Int,
     val strokeWidth: Float,
-    val points: List<Point>
+    val points: List<Point>,
+    val isEraser: Boolean = false
 )
 
 data class DrawingData(
@@ -100,6 +101,7 @@ data class DrawingData(
             val pathObj = JSONObject()
             pathObj.put("color", path.color)
             pathObj.put("strokeWidth", path.strokeWidth.toDouble())
+            pathObj.put("isEraser", path.isEraser)
             val pointsArray = JSONArray()
             for (pt in path.points) {
                 val ptObj = JSONObject()
@@ -184,7 +186,8 @@ data class DrawingData(
                         val y = ptObj.optDouble("y", 0.0).toFloat()
                         points.add(Point(x, y))
                     }
-                    paths.add(DrawPath(color, strokeWidth, points))
+                    val isEraser = pathObj.optBoolean("isEraser", false)
+                    paths.add(DrawPath(color, strokeWidth, points, isEraser))
                 }
                 DrawingData(id, width, height, paths, offsetX, offsetY)
             } catch (e: Exception) {
@@ -466,14 +469,19 @@ fun FullscreenDrawingEditor(
                         }
                         
                         // Adaptive Path Contrast Adjustment
+                        val isEraser = drawP.isEraser || (drawP.color == drawingView.canvasBackgroundColor)
                         var pathColor = drawP.color
-                        if (bgIsDark) {
-                            if (pathColor == android.graphics.Color.BLACK || pathColor == android.graphics.Color.parseColor("#121212")) {
-                                pathColor = themeOnBgColor
-                            }
+                        if (isEraser) {
+                            pathColor = drawingView.canvasBackgroundColor
                         } else {
-                            if (pathColor == android.graphics.Color.WHITE || pathColor == android.graphics.Color.parseColor("#FFFFFF")) {
-                                pathColor = themeOnBgColor
+                            if (bgIsDark) {
+                                if (pathColor == android.graphics.Color.BLACK || pathColor == android.graphics.Color.parseColor("#121212")) {
+                                    pathColor = themeOnBgColor
+                                }
+                            } else {
+                                if (pathColor == android.graphics.Color.WHITE || pathColor == android.graphics.Color.parseColor("#FFFFFF")) {
+                                    pathColor = themeOnBgColor
+                                }
                             }
                         }
 
@@ -486,7 +494,6 @@ fun FullscreenDrawingEditor(
                             color = pathColor
                             strokeWidth = drawP.strokeWidth * density
                         }
-                        val isEraser = drawP.color == drawingView.canvasBackgroundColor
                         
                         drawingView.paths.add(DrawnPath(
                             path = path,
@@ -543,7 +550,8 @@ fun FullscreenDrawingEditor(
                                             x = (pt.x - minX + paddingPx) / density,
                                             y = (pt.y - minY + paddingPx) / density
                                         )
-                                    }
+                                    },
+                                    isEraser = drawnPath.isEraser
                                 )
                             }
                             val computedOffsetX = (minX - paddingPx) / density

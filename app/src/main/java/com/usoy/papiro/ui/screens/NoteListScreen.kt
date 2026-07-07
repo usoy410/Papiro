@@ -293,7 +293,7 @@ fun NoteListScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             
                             Text(
-                                text = note.content,
+                                text = getNotePreview(note.content),
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
@@ -318,5 +318,43 @@ fun NoteListScreen(
                 }
             }
         }
+    }
+}
+
+private fun getNotePreview(content: String): String {
+    if (content.isEmpty()) return ""
+    var cleanText = content
+    if (cleanText.contains("```drawing")) {
+        try {
+            val builder = java.lang.StringBuilder()
+            var lastIndex = 0
+            while (true) {
+                val startIndex = cleanText.indexOf("```drawing", lastIndex)
+                if (startIndex == -1) {
+                    builder.append(cleanText.substring(lastIndex))
+                    break
+                }
+                builder.append(cleanText.substring(lastIndex, startIndex))
+                val endIndex = cleanText.indexOf("```", startIndex + 10)
+                if (endIndex == -1) {
+                    builder.append("[Drawing]")
+                    break
+                }
+                builder.append("[Drawing]")
+                lastIndex = endIndex + 3
+            }
+            cleanText = builder.toString()
+        } catch (e: Exception) {
+            cleanText = cleanText.replace(Regex("```drawing[\\s\\S]*?```"), "[Drawing]")
+        }
+    }
+    
+    // Normalize spaces and newlines
+    cleanText = cleanText.replace(Regex("\\s+"), " ").trim()
+    
+    return if (cleanText.length > 150) {
+        cleanText.take(150) + "..."
+    } else {
+        cleanText
     }
 }
