@@ -858,18 +858,22 @@ fun NoteEditorScreen(
             width = drawingWidth,
             height = drawingHeight,
             initialPaths = currentEditingDrawing?.paths ?: emptyList(),
+            offsetX = currentEditingDrawing?.offsetX ?: 0f,
+            offsetY = currentEditingDrawing?.offsetY ?: 0f,
             onDismiss = {
                 showDrawingEditor = false
                 currentEditingDrawing = null
             },
-            onSave = { computedWidth, computedHeight, savedPaths ->
+            onSave = { computedWidth, computedHeight, savedPaths, computedOffsetX, computedOffsetY ->
                 val currentDrawing = currentEditingDrawing
                 if (currentDrawing != null) {
                     val updatedDrawing = DrawingData(
                         id = currentDrawing.id,
                         width = computedWidth,
                         height = computedHeight,
-                        paths = savedPaths
+                        paths = savedPaths,
+                        offsetX = computedOffsetX,
+                        offsetY = computedOffsetY
                     )
                     val updatedContent = updateBlockInContent(contentValue.text, currentDrawing.id, updatedDrawing)
                     contentValue = TextFieldValue(
@@ -881,7 +885,9 @@ fun NoteEditorScreen(
                         id = System.currentTimeMillis().toString(),
                         width = computedWidth,
                         height = computedHeight,
-                        paths = savedPaths
+                        paths = savedPaths,
+                        offsetX = computedOffsetX,
+                        offsetY = computedOffsetY
                     )
                     val drawingCodeBlock = "\n```drawing\n${newDrawing.toJson()}\n```\n"
                     val currentText = contentValue.text

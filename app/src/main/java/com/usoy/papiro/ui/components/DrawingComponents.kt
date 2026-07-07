@@ -66,6 +66,14 @@ import org.json.JSONObject
 
 data class Point(val x: Float, val y: Float)
 
+data class SaveResult(
+    val width: Int,
+    val height: Int,
+    val paths: List<DrawPath>,
+    val offsetX: Float,
+    val offsetY: Float
+)
+
 data class DrawPath(
     val color: Int,
     val strokeWidth: Float,
@@ -76,13 +84,17 @@ data class DrawingData(
     val id: String,
     val width: Int,
     val height: Int,
-    val paths: List<DrawPath>
+    val paths: List<DrawPath>,
+    val offsetX: Float = 0f,
+    val offsetY: Float = 0f
 ) {
     fun toJson(): String {
         val json = JSONObject()
         json.put("id", id)
         json.put("width", width)
         json.put("height", height)
+        json.put("offsetX", offsetX.toDouble())
+        json.put("offsetY", offsetY.toDouble())
         val pathsArray = JSONArray()
         for (path in paths) {
             val pathObj = JSONObject()
@@ -155,6 +167,8 @@ data class DrawingData(
                 val id = json.optString("id", java.util.UUID.randomUUID().toString())
                 val width = json.optInt("width", 320).let { if (it <= 0) 320 else it }
                 val height = json.optInt("height", 240).let { if (it <= 0) 240 else it }
+                val offsetX = json.optDouble("offsetX", 0.0).toFloat()
+                val offsetY = json.optDouble("offsetY", 0.0).toFloat()
                 val pathsArray = json.optJSONArray("paths") ?: JSONArray()
                 val paths = mutableListOf<DrawPath>()
                 for (i in 0 until pathsArray.length()) {
@@ -172,7 +186,7 @@ data class DrawingData(
                     }
                     paths.add(DrawPath(color, strokeWidth, points))
                 }
-                DrawingData(id, width, height, paths)
+                DrawingData(id, width, height, paths, offsetX, offsetY)
             } catch (e: Exception) {
                 null
             }
@@ -345,8 +359,10 @@ fun FullscreenDrawingEditor(
     width: Int,
     height: Int,
     initialPaths: List<DrawPath>,
+    offsetX: Float = 0f,
+    offsetY: Float = 0f,
     onDismiss: () -> Unit,
-    onSave: (width: Int, height: Int, List<DrawPath>) -> Unit
+    onSave: (width: Int, height: Int, List<DrawPath>, offsetX: Float, offsetY: Float) -> Unit
 ) {
     androidx.activity.compose.BackHandler(onBack = onDismiss)
 
@@ -437,15 +453,15 @@ fun FullscreenDrawingEditor(
                         drawingView.requestLayout()
                     }
 
-                    // Populate initial paths by scaling back to pixels
+                    // Populate initial paths by scaling back to pixels with offset restoration
                     initialPaths.forEach { drawP ->
                         val path = android.graphics.Path()
                         if (drawP.points.isNotEmpty()) {
                             val first = drawP.points.first()
-                            path.moveTo(first.x * density, first.y * density)
+                            path.moveTo((first.x + offsetX) * density, (first.y + offsetY) * density)
                             for (i in 1 until drawP.points.size) {
                                 val pt = drawP.points[i]
-                                path.lineTo(pt.x * density, pt.y * density)
+                                path.lineTo((pt.x + offsetX) * density, (pt.y + offsetY) * density)
                             }
                         }
                         
@@ -476,10 +492,18 @@ fun FullscreenDrawingEditor(
                             path = path,
                             paint = paint,
                             isEraser = isEraser,
-                            points = drawP.points.map { PointF(it.x * density, it.y * density) }
+                            points = drawP.points.map { PointF((it.x + offsetX) * density, (it.y + offsetY) * density) }
                         ))
                     }
                     drawingView.invalidate()
+
+                    // Auto-scroll the view port to make the drawing visible immediately
+                    if (offsetY > 0f) {
+                        scrollView.post {
+                            val scrollY = ((offsetY - 20f) * density).toInt().coerceAtLeast(0)
+                            scrollView.scrollTo(0, scrollY)
+                        }
+                    }
 
                     // Wiring up events
                     btnBack.setOnClickListener {
@@ -497,7 +521,7 @@ fun FullscreenDrawingEditor(
                         val paths = drawingView.paths
                         val allPoints = paths.flatMap { it.points }
                         
-                        val (finalWidthDp, finalHeightDp, processedPaths) = if (allPoints.isNotEmpty()) {
+                        val saveResult = if (allPoints.isNotEmpty()) {
                             val minX = allPoints.minOf { it.x }
                             val maxX = allPoints.maxOf { it.x }
                             val minY = allPoints.minOf { it.y }
@@ -522,12 +546,18 @@ fun FullscreenDrawingEditor(
                                     }
                                 )
                             }
-                            Triple(widthDp, heightDp, adjustedPaths)
+                            val computedOffsetX = (minX - paddingPx) / density
+                            val computedOffsetY = (minY - paddingPx) / density
+                            
+                            val finalOffsetX = if (computedOffsetX < 0f) 0f else computedOffsetX
+                            val finalOffsetY = if (computedOffsetY < 0f) 0f else computedOffsetY
+                            
+                            SaveResult(widthDp, heightDp, adjustedPaths, finalOffsetX, finalOffsetY)
                         } else {
-                            Triple(320, 240, emptyList<DrawPath>())
+                            SaveResult(320, 240, emptyList<DrawPath>(), 0f, 0f)
                         }
                         
-                        onSave(finalWidthDp, finalHeightDp, processedPaths)
+                        onSave(saveResult.width, saveResult.height, saveResult.paths, saveResult.offsetX, saveResult.offsetY)
                     }
 
                     btnUndo.setOnClickListener {
@@ -926,9 +956,24 @@ fun FullscreenDrawingEditor(
                         updateToolSelection(R.id.btn_smart_shape)
                     }
 
+                    btnToolEraser.setOnClickListener {
+                        updateToolSelection(R.id.btn_tool_eraser)
+                    }
+
                     btnFingerPainting.setOnClickListener {
                         drawingView.isFingerPaintingEnabled = !drawingView.isFingerPaintingEnabled
                         updateFingerPaintingVisuals()
+                    }
+
+                    btnGridType.setOnClickListener {
+                        val nextGridType = when (drawingView.currentGridType) {
+                            DrawingView.GridType.NONE -> DrawingView.GridType.GRID
+                            DrawingView.GridType.GRID -> DrawingView.GridType.DOTS
+                            DrawingView.GridType.DOTS -> DrawingView.GridType.RULED
+                            DrawingView.GridType.RULED -> DrawingView.GridType.NONE
+                        }
+                        drawingView.currentGridType = nextGridType
+                        updateGridTypeVisuals()
                     }
 
                     view

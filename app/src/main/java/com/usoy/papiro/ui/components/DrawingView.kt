@@ -470,31 +470,91 @@ class DrawingView @JvmOverloads constructor(
         val h = maxY - minY
 
         val shapePath = Path()
+        val shapePoints = mutableListOf<PointF>()
 
         when {
             shapeName.contains("circle") || shapeName.contains("oval") -> {
                 val radius = (w + h) / 4
                 shapePath.addCircle(cx, cy, radius, Path.Direction.CW)
+
+                // Generate 72 smooth points (5-degree increments) around the circle/oval
+                val rx = w / 2f
+                val ry = h / 2f
+                val numPoints = 72
+                for (i in 0..numPoints) {
+                    val angle = (2f * Math.PI * i / numPoints).toFloat()
+                    val px = cx + rx * kotlin.math.cos(angle)
+                    val py = cy + ry * kotlin.math.sin(angle)
+                    shapePoints.add(PointF(px, py))
+                }
             }
             shapeName.contains("rectangle") || shapeName.contains("square") || shapeName.contains("box") -> {
                 shapePath.addRect(minX, minY, maxX, maxY, Path.Direction.CW)
+
+                // Generate points along the edges to support eraser/interaction smoothly
+                val numPointsPerEdge = 15
+                // Top edge
+                for (i in 0 until numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(minX + f * w, minY))
+                }
+                // Right edge
+                for (i in 0 until numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(maxX, minY + f * h))
+                }
+                // Bottom edge
+                for (i in 0 until numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(maxX - f * w, maxY))
+                }
+                // Left edge
+                for (i in 0..numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(minX, maxY - f * h))
+                }
             }
             shapeName.contains("triangle") -> {
                 shapePath.moveTo(cx, minY)
                 shapePath.lineTo(minX, maxY)
                 shapePath.lineTo(maxX, maxY)
                 shapePath.close()
+
+                // Generate points along the triangle boundaries
+                val numPointsPerEdge = 20
+                // Edge 1: Top to Bottom-Left
+                for (i in 0 until numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(cx + f * (minX - cx), minY + f * h))
+                }
+                // Edge 2: Bottom-Left to Bottom-Right
+                for (i in 0 until numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(minX + f * w, maxY))
+                }
+                // Edge 3: Bottom-Right to Top
+                for (i in 0..numPointsPerEdge) {
+                    val f = i.toFloat() / numPointsPerEdge
+                    shapePoints.add(PointF(maxX + f * (cx - maxX), maxY - f * h))
+                }
             }
             shapeName.contains("line") || shapeName.contains("straight") || shapeName.contains("arrow") -> {
                 val start = points.first()
                 val end = points.last()
                 shapePath.moveTo(start.x, start.y)
                 shapePath.lineTo(end.x, end.y)
+
+                // Generate points along the line segment
+                val numPoints = 30
+                for (i in 0..numPoints) {
+                    val f = i.toFloat() / numPoints
+                    shapePoints.add(PointF(start.x + f * (end.x - start.x), start.y + f * (end.y - start.y)))
+                }
             }
             else -> return false
         }
 
-        paths.add(DrawnPath(shapePath, paint, false, points))
+        paths.add(DrawnPath(shapePath, paint, false, shapePoints))
         return true
     }
 
