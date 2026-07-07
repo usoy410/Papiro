@@ -20,7 +20,8 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|density">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
