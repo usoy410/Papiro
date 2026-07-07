@@ -144,7 +144,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="#1E1E1E"
-        android:paddingVertical="12dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="24dp"
         android:paddingHorizontal="16dp">
 
         <!-- Inline Brush Size Slider + Color Toggle (Borderless container, decorated dynamically in Kotlin) -->

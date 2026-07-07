@@ -348,23 +348,21 @@ fun FullscreenDrawingEditor(
     onDismiss: () -> Unit,
     onSave: (width: Int, height: Int, List<DrawPath>) -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            val composeBgColor = MaterialTheme.colorScheme.background
-            val composeOnBgColor = MaterialTheme.colorScheme.onBackground
-            val composeSurfaceColor = MaterialTheme.colorScheme.surface
-            val composeOnSurfaceColor = MaterialTheme.colorScheme.onSurface
-            val composePrimaryColor = MaterialTheme.colorScheme.primary
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
 
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding(),
-                factory = { context ->
+    Surface(modifier = Modifier.fillMaxSize()) {
+        val composeBgColor = MaterialTheme.colorScheme.background
+        val composeOnBgColor = MaterialTheme.colorScheme.onBackground
+        val composeSurfaceColor = MaterialTheme.colorScheme.surface
+        val composeOnSurfaceColor = MaterialTheme.colorScheme.onSurface
+        val composePrimaryColor = MaterialTheme.colorScheme.primary
+
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            factory = { context ->
                     val view = LayoutInflater.from(context).inflate(R.layout.drawing_editor_layout, null, false)
                     
                     val drawingView = view.findViewById<DrawingView>(R.id.drawing_view)
@@ -941,7 +939,6 @@ fun FullscreenDrawingEditor(
                 }
             )
         }
-    }
 }
 
 @Composable

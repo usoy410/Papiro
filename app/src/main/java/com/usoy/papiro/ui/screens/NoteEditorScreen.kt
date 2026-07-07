@@ -232,8 +232,9 @@ fun NoteEditorScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -932,6 +933,7 @@ fun NoteEditorScreen(
             undoRedoManager.recordExplicitSnapshot(restoredContent)
         }
     )
+    }
 }
 
 private fun startTemporaryTextCycle(
