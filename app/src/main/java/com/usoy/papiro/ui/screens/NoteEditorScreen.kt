@@ -386,7 +386,7 @@ fun NoteEditorScreen(
                                 showDrawingEditor = true
                             },
                             onImageImportClick = { picturePickerLauncher.launch("image/*") },
-                            viewModel = viewModel
+                            
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
@@ -546,7 +546,7 @@ fun NoteEditorScreen(
                                 },
                                 requestFocus = requestFocus,
                                 onRequestFocusConsumed = { requestFocus = false },
-                                onEnhanceBlock = if (viewModel.settingsStore.provider == com.usoy.papiro.data.SettingsStore.PROVIDER_GEMINI) {
+                                onEnhanceBlock = if (true) {
                                     { textToEnhance, onResult ->
                                         viewModel.enhanceNote(textToEnhance) { enhancedText ->
                                             onResult(enhancedText)
@@ -770,7 +770,7 @@ fun NoteEditorScreen(
     // AI Topic Generator Dialog
     com.usoy.papiro.ui.components.AiTopicGeneratorDialog(
         showAiDialog = showAiDialog,
-        provider = viewModel.settingsStore.provider,
+        
         onDismiss = { showAiDialog = false },
         onBuild = { topic ->
             if (title.isEmpty()) title = topic
@@ -806,7 +806,7 @@ fun NoteEditorScreen(
     // Quiz Generator Dialog
     com.usoy.papiro.ui.components.QuizGeneratorDialog(
         showQuizDialog = showQuizDialog,
-        provider = viewModel.settingsStore.provider,
+        
         onDismiss = { showQuizDialog = false },
         onGenerate = { generatedQuizType, generatedQuizDifficulty, generatedQuizItems ->
             isEditing = true

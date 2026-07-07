@@ -94,49 +94,8 @@ fun EngineeringToolsRow(
     onQuizClick: () -> Unit,
     onOcrClick: () -> Unit,
     onDrawClick: () -> Unit,
-    onImageImportClick: () -> Unit,
-    viewModel: NoteViewModel
+    onImageImportClick: () -> Unit
 ) {
-    val settingsStore = viewModel.settingsStore
-    val context = LocalContext.current
-
-    // Observe SharedPreferences changes reactive-ly to keep everything perfectly in sync
-    var provider by remember { mutableStateOf(settingsStore.provider) }
-    var selectedCloudModel by remember { mutableStateOf(settingsStore.selectedCloudModel) }
-    var selectedLocalModel by remember { mutableStateOf("") }
-    var cloudModels by remember { mutableStateOf(settingsStore.cloudModels) }
-    var localModels by remember { mutableStateOf(emptyList<String>()) }
-
-    DisposableEffect(settingsStore) {
-        val prefs = context.getSharedPreferences("papiro_settings", android.content.Context.MODE_PRIVATE)
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            when (key) {
-                "provider" -> provider = settingsStore.provider
-                "selected_cloud_model" -> selectedCloudModel = settingsStore.selectedCloudModel
-                "selected_local_model" -> selectedLocalModel = ""
-                "cloud_models_list" -> cloudModels = settingsStore.cloudModels
-                "local_models_list" -> localModels = emptyList<String>()
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose {
-            prefs.unregisterOnSharedPreferenceChangeListener(listener)
-        }
-    }
-
-    var expanded by remember { mutableStateOf(false) }
-
-    // Read active model and list of models based on active provider, keyed on SettingsStore values to ensure perfect synchronization
-    
-    var activeModel by remember(provider, selectedCloudModel) {
-        mutableStateOf(selectedCloudModel.ifEmpty { "gemini-2.5-flash" })
-    }
-    val models = remember(provider, cloudModels) {
-        cloudModels.ifEmpty { listOf("gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite") }
-    }
-    
-    val icon = Icons.Default.Cloud
-    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,73 +150,6 @@ fun EngineeringToolsRow(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        // Active Model Selector with DropdownMenu
-        Box {
-            ToolButton(
-                onClick = { expanded = true },
-                icon = icon,
-                label = activeModel,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                if (models.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("No models found. Scan/Download in Settings.") },
-                        onClick = { expanded = false }
-                    )
-                } else {
-                    models.forEach { model ->
-                        val isSelected = (model == activeModel)
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    text = model,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                ) 
-                            },
-                            onClick = {
-                                expanded = false
-                                if (model != "Download a model in Settings") {
-                                    activeModel = model
-                                    if (false) {
-                                        var foundCustom = false
-                                        emptySet<String>().forEach { customPath ->
-                                            val customFile = java.io.File(customPath)
-                                            if (customFile.exists() && customFile.name == model) {
-                                                
-                                                foundCustom = true
-                                            }
-                                        }
-                                        if (!foundCustom) {
-                                            val selectedFile = java.io.File(java.io.File(context.filesDir, "models"), model)
-                                            
-                                        }
-                                    } else {
-                                        settingsStore.selectedCloudModel = model
-                                    }
-                                }
-                            },
-                            trailingIcon = {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 

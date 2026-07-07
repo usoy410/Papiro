@@ -1,89 +1,54 @@
 package com.usoy.papiro.ui.components
-import com.usoy.papiro.ui.components.*
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.*
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.animation.core.*
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-import com.usoy.papiro.viewmodel.NoteViewModel
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-
+import com.usoy.papiro.data.NoteHistoryEntity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun AiTopicGeneratorDialog(
     showAiDialog: Boolean,
-    provider: String,
     onDismiss: () -> Unit,
     onBuild: (String) -> Unit
 ) {
     if (!showAiDialog) return
     var aiTopic by remember { mutableStateOf("") }
-    val providerName = when (provider) {
-        
-        else -> "Google Gemini"
-    }
+    val providerName = "Google Gemini"
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "GENERATE BLUEPRINT NOTE",
+                text = "GENERATE WITH AI",
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             )
         },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
                     text = "Specify any topic or concept (e.g., Dijkstra's Algorithm, Big-O Notation, TCP Handshake) and our $providerName will compose an active note structure.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = aiTopic,
                     onValueChange = { aiTopic = it },
-                    placeholder = { Text("Topic keyword") },
-                    modifier = Modifier.fillMaxWidth()
+                    label = { Text("Topic or Concept") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
         },
@@ -92,9 +57,10 @@ fun AiTopicGeneratorDialog(
                 onClick = {
                     onBuild(aiTopic)
                     onDismiss()
-                }
+                },
+                enabled = aiTopic.isNotBlank()
             ) {
-                Text("BUILD")
+                Text("BUILD NOTE")
             }
         },
         dismissButton = {
@@ -105,21 +71,19 @@ fun AiTopicGeneratorDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizGeneratorDialog(
     showQuizDialog: Boolean,
-    provider: String,
     onDismiss: () -> Unit,
-    onGenerate: (quizType: String, quizDifficulty: String, quizItems: String) -> Unit
+    onGenerate: (type: String, difficulty: String, items: String) -> Unit
 ) {
     if (!showQuizDialog) return
     var quizType by remember { mutableStateOf("Multiple Choice") }
     var quizDifficulty by remember { mutableStateOf("Medium") }
     var quizItems by remember { mutableStateOf("5") }
-    val providerName = when (provider) {
-        
-        else -> "Google Gemini"
-    }
+    val providerName = "Google Gemini"
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -137,6 +101,7 @@ fun QuizGeneratorDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
                 Text("Quiz Type", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("Multiple Choice", "Flashcards").forEach { type ->
@@ -147,6 +112,7 @@ fun QuizGeneratorDialog(
                         )
                     }
                 }
+
                 Text("Difficulty Level", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("Easy", "Medium", "Hard").forEach { level ->
@@ -157,12 +123,15 @@ fun QuizGeneratorDialog(
                         )
                     }
                 }
+
                 OutlinedTextField(
                     value = quizItems,
-                    onValueChange = { newValue -> 
-                        if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty()) {
+                            quizItems = newValue
+                        } else {
                             val intValue = newValue.toIntOrNull()
-                            if (intValue == null || intValue <= 20) {
+                            if (intValue != null && intValue in 1..20) {
                                 quizItems = newValue
                             }
                         }
@@ -197,6 +166,7 @@ fun MarkdownHelpDialog(
     onDismiss: () -> Unit
 ) {
     if (!showHelpDialog) return
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -219,31 +189,31 @@ fun MarkdownHelpDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    com.usoy.papiro.ui.components.HelpGuideRow(
+                    HelpGuideRow(
                         "`some_variable_or_expression`",
                         "Inline Code: Use backticks to highlight variables or short formulas."
                     )
-                    com.usoy.papiro.ui.components.HelpGuideRow(
-                        "```kotlin\nval list = listOf(1, 2, 3)\nlist.map { it * 2 }\n```",
+                    HelpGuideRow(
+                        "```python\ndef hello():\n    print(\"World\")\n```",
                         "Code Block: Specify the language for syntax highlighting."
                     )
-                    com.usoy.papiro.ui.components.HelpGuideRow(
-                        "```mermaid\ngraph TD\n  A[Start] --> B(Process)\n  B --> C{Success?}\n  C -- Yes --> D[Draw]\n  C -- No --> E[End]\n```",
+                    HelpGuideRow(
+                        "```mermaid\ngraph TD;\n    A-->B;\n    A-->C;\n    B-->D;\n    C-->D;\n```",
                         "Mermaid Diagram: Renders flowcharts and architecture graphs dynamically."
                     )
-                    com.usoy.papiro.ui.components.HelpGuideRow(
-                        "```drawing\n{\n  \"id\": \"cross_box\",\n  \"width\": 320,\n  \"height\": 240,\n  \"paths\": [\n    {\n      \"color\": \"red\",\n      \"strokeWidth\": 4,\n      \"points\": [\n        {\"x\": 20, \"y\": 20},\n        {\"x\": 300, \"y\": 20},\n        {\"x\": 300, \"y\": 220},\n        {\"x\": 20, \"y\": 220},\n        {\"x\": 20, \"y\": 20}\n      ]\n    },\n    {\n      \"color\": \"blue\",\n      \"strokeWidth\": 6,\n      \"points\": [\n        {\"x\": 60, \"y\": 60},\n        {\"x\": 260, \"y\": 180}\n      ]\n    },\n    {\n      \"color\": \"blue\",\n      \"strokeWidth\": 6,\n      \"points\": [\n        {\"x\": 260, \"y\": 60},\n        {\"x\": 60, \"y\": 180}\n      ]\n    }\n  ]\n}\n```",
+                    HelpGuideRow(
+                        """```json:illustration\n{\n  "canvasWidth": 300,\n  "canvasHeight": 200,\n  "elements": [\n    { "type": "rect", "x": 10, "y": 10, "width": 280, "height": 180, "color": "#FF5722", "strokeWidth": 4 },\n    { "type": "line", "startX": 10, "startY": 10, "endX": 290, "endY": 190, "color": "#2196F3", "strokeWidth": 2 },\n    { "type": "line", "startX": 10, "startY": 190, "endX": 290, "endY": 10, "color": "#2196F3", "strokeWidth": 2 }\n  ]\n}\n```""",
                         "Native Illustration: A JSON coordinates structure drawing a beautiful red outline box with a blue inner cross."
                     )
-                    com.usoy.papiro.ui.components.HelpGuideRow(
+                    HelpGuideRow(
                         "| Header <!--style:col,green,default--> | Header 2 <!--style:col,blue,default--> |\n| --- | --- |\n| Cell 1 | Cell 2 |",
                         "Custom Tables: Styled headers with column background colors (green, blue, orange, red, purple, etc.)."
                     )
-                    com.usoy.papiro.ui.components.HelpGuideRow(
+                    HelpGuideRow(
                         "\$\$E = mc^2\$\$",
                         "KaTeX Math Formula: For equations and mathematical notations."
                     )
-                    com.usoy.papiro.ui.components.HelpGuideRow(
+                    HelpGuideRow(
                         "- Parent bullet point\n-- Child nested bullet point",
                         "Hierarchical Bullets: Use double dash (--) for secondary indented lists with open bullet point circles (○)."
                     )
@@ -251,7 +221,9 @@ fun MarkdownHelpDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text("GOT IT") }
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE")
+            }
         }
     )
 }
@@ -259,7 +231,7 @@ fun MarkdownHelpDialog(
 @Composable
 fun VersionHistoryDialog(
     showHistoryDialog: Boolean,
-    snapshots: List<com.usoy.papiro.data.NoteHistoryEntity>,
+    snapshots: List<NoteHistoryEntity>,
     onDismiss: () -> Unit,
     onRestore: (String) -> Unit
 ) {
@@ -286,8 +258,9 @@ fun VersionHistoryDialog(
                 ) {
                     items(snapshots.size) { index ->
                         val snapshot = snapshots[index]
-                        val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy HH:mm", java.util.Locale.getDefault())
-                        val dateStr = dateFormat.format(java.util.Date(snapshot.timestamp))
+                        val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+                        val dateStr = dateFormat.format(Date(snapshot.timestamp))
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -305,7 +278,7 @@ fun VersionHistoryDialog(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "${snapshot.content.length} characters",
+                                        text = "${snapshot.content.length} chars",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

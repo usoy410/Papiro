@@ -222,7 +222,7 @@ fun UploadDocumentScreen(
                 Text(errorMessage!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
             
-            val isOcrSupported = settingsStore.provider == com.usoy.papiro.data.SettingsStore.PROVIDER_GEMINI
+            val isOcrSupported = true
             
             if (!isOcrSupported) {
                 Text(

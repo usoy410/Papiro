@@ -71,7 +71,7 @@ class DocumentExtractionRepository(private val settingsStore: SettingsStore) {
     suspend fun extractTextFromImage(context: Context, imageBytes: ByteArray): String = withContext(Dispatchers.IO) {
         try {
             val ocrStrategy = settingsStore.ocrStrategy
-            if (ocrStrategy == "GEMINI_VISION" && settingsStore.provider == SettingsStore.PROVIDER_GEMINI) {
+            if (ocrStrategy == "GEMINI_VISION") {
                 val base64Str = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
                 return@withContext GeminiService.extractTextFromBase64ImagesDirectly(context, listOf(base64Str), settingsStore)
             } else {

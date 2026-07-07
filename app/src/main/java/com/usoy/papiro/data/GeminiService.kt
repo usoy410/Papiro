@@ -142,7 +142,7 @@ object GeminiService {
     suspend fun generateTableOfContents(context: Context, noteContent: String, settings: SettingsStore): String = withContext(Dispatchers.IO) {
         val apiKey = settings.geminiApiKey.trim().ifEmpty { BuildConfig.GEMINI_API_KEY }
            
-        if (apiKey.isEmpty() && settings.provider == SettingsStore.PROVIDER_GEMINI) {
+        if (apiKey.isEmpty()) {
             return@withContext "# TABLE OF CONTENTS\n\n- Error: Gemini API Key is missing. Please configure it in Settings."
         }
            

@@ -67,51 +67,11 @@ fun SettingsScreen(
 
     var selectedAppTheme by remember { mutableStateOf(settingsStore.appTheme) }
     var selectedTabMode by remember { mutableStateOf(if (settingsStore.appThemeMode == "DARK") 1 else 0) }
-    var provider by remember { mutableStateOf(settingsStore.provider) }
-    var localModelPath by remember { mutableStateOf("") }
-    var localMaxTokens by remember { mutableStateOf(512) }
-    var localTemperature by remember { mutableStateOf(0.7f) }
     var geminiApiKey by remember { mutableStateOf(settingsStore.geminiApiKey) }
     var paperDesign by remember { mutableStateOf(settingsStore.paperDesign) }
     var ocrStrategy by remember { mutableStateOf(settingsStore.ocrStrategy) }
     
-    var cloudModelsList by remember { mutableStateOf(settingsStore.cloudModels) }
-    var selectedCloudModel by remember { mutableStateOf(settingsStore.selectedCloudModel) }
-    var newCloudModelInput by remember { mutableStateOf("") }
-    var showGuideDialog by remember { mutableStateOf(false) }
-    var activeModelTab by remember { mutableStateOf(0) } // 0 = Local, 1 = Cloud
-    var isFetchingModels by remember { mutableStateOf(false) }
-    
-    var isTestingConnection by remember { mutableStateOf(false) }
-    var connectionTestMessage by remember { mutableStateOf<String?>(null) }
-    
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
-
-    LaunchedEffect(connectionTestMessage) {
-        connectionTestMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            connectionTestMessage = null
-        }
-    }
-
-
-
-    val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri: android.net.Uri? ->
-        uri?.let {
-            
-            
-            
-            
-            
-            
-            
-        }
-    }
-
     Scaffold(
-        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
@@ -120,14 +80,6 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showGuideDialog = true }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.HelpOutline,
-                            contentDescription = "Guide"
                         )
                     }
                 },
@@ -468,7 +420,7 @@ fun SettingsScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Provider selection, model configurations & parameters",
+                                        text = "Gemini API key & OCR configurations",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -603,30 +555,4 @@ fun SettingsScreen(
             }
         }
     }
-    if (showGuideDialog) {
-        val uriHandler = LocalUriHandler.current
-        val clipboardManager = LocalClipboardManager.current
-        AlertDialog(
-            onDismissRequest = { showGuideDialog = false },
-            title = { Text("AI Provider Guide & Setup", fontWeight = FontWeight.Bold) },
-            text = {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    item {
-                        Text("1. Google AI Studio (Gemini API)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("Get a free API key from Google AI Studio to use the latest Gemini models like gemini-1.5-flash, gemini-2.5-flash and gemini-3.1-flash-lite directly.", style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Button(onClick = { uriHandler.openUri("https://aistudio.google.com/app/apikey") }) {
-                            Text("Get Gemini API Key")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showGuideDialog = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
 }
-

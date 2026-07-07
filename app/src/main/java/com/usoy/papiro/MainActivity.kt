@@ -22,8 +22,10 @@ import com.usoy.papiro.ui.theme.PapiroTheme
 import com.usoy.papiro.viewmodel.NoteViewModel
 import com.usoy.papiro.viewmodel.NoteViewModelFactory
 
+import com.usoy.papiro.ui.screens.OnboardingScreen
+
 enum class Screen {
-    LIST, EDITOR, SETTINGS, UPLOAD
+    LIST, EDITOR, SETTINGS, UPLOAD, ONBOARDING
 }
 
 class MainActivity : ComponentActivity() {
@@ -41,7 +43,7 @@ class MainActivity : ComponentActivity() {
             var currentTheme by remember { mutableStateOf(settingsStore.appTheme) }
             var currentThemeMode by remember { mutableStateOf(settingsStore.appThemeMode) }
 
-            var currentScreen by remember { mutableStateOf(Screen.LIST) }
+            var currentScreen by remember { mutableStateOf(if (settingsStore.isOnboardingCompleted) Screen.LIST else Screen.ONBOARDING) }
             var uploadPreselectedMode by remember { mutableStateOf("Note") }
             val currentNote by viewModel.currentNote.collectAsState()
 
@@ -65,6 +67,15 @@ class MainActivity : ComponentActivity() {
                     }
 
                     when (currentScreen) {
+                        Screen.ONBOARDING -> {
+                            OnboardingScreen(
+                                settingsStore = settingsStore,
+                                onFinish = { 
+                                    settingsStore.isOnboardingCompleted = true
+                                    currentScreen = Screen.LIST 
+                                }
+                            )
+                        }
                         Screen.LIST -> {
                             NoteListScreen(
                                 viewModel = viewModel,
