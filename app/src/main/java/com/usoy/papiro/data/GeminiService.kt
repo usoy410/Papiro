@@ -41,11 +41,20 @@ object GeminiService {
         2. A structured Table of Contents (TOC) at the very beginning of the note to easily navigate to sections, utilizing standard markdown bullet links, e.g., `- [Creational Patterns](#creational-patterns)`. Ensure the link anchors are strictly lowercase, hyphenated, and alphanumeric (matching the section headers).
         3. Fully structured sections with detailed bullet points corresponding to the Table of Contents.
         4. Detailed code blocks with syntax for technical topics, or mathematical formulas (using standard markdown LaTeX blocks if helpful).
-        5. Visualizations:
-           - Use DIAGRAMS (standard Mermaid inside ```mermaid blocks) for structured flowcharts, sequence diagrams, process flows, state diagrams, timelines, organizational charts, or hierarchical trees. IMPORTANT: ALWAYS enclose node text with parenthesis or special characters inside double quotes (e.g., `A["Text (with parens)"]`) to prevent Mermaid parse errors.
-        6. Keep it educational, engaging, and rich in depth. CRITICAL: Output ONLY the Markdown note itself. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the note', 'Pro tip:', 'Let me know', etc.).
-        7. CRITICAL MARKDOWN LIST FORMATTING: Never use asterisks (`*`) or plus signs (`+`) for markdown bullet lists/points. Always use a single hyphen followed by exactly one space.
-        8. CUSTOM MARKDOWN TABLE STYLING AND COLORING: Whenever generating tables, you MUST utilize the app's advanced metadata comment tag in the VERY FIRST cell.
+        5. Visualizations & Diagrams (OPTIONAL & ONLY WHEN TRULY BENEFICIAL):
+           - ONLY if the topic is complex and a diagram/visual flowchart, sequence diagram, process flow, timeline, hierarchical tree, or structured chart would significantly aid comprehension, you may include a Mermaid diagram inside a ```mermaid code block.
+           - IMPORTANT: ALWAYS enclose node text with parenthesis or special characters inside double quotes (e.g., `A["Text (with parens)"]`) to prevent Mermaid parse errors.
+           - If a diagram is not highly relevant or feels forced, do NOT generate one. Keep simple topics simple.
+        6. Web Images & Real-world Illustrations (OPTIONAL & ONLY WHEN TRULY BENEFICIAL):
+           - ONLY if the topic is highly visual (e.g., human anatomy, biology/cells, famous historical landmarks, planetary/astronomical systems, physical machinery, or geographical maps) and would benefit immensely from a real-world picture or scientific illustration, you may include standard markdown image links.
+           - CRITICAL RULE TO PREVENT 404 ERRORS: Do NOT try to guess or hallucinate specific Unsplash photo IDs (e.g., `images.unsplash.com/photo-1234...`) or Wikimedia Commons paths, as they are guaranteed to result in 404 Not Found errors.
+           - Instead, ALWAYS use LoremFlickr, which is a stable, public, keyword-based image routing service that returns real, high-quality, live images matching your specified tag.
+           - Format: `![Descriptive Image Title](https://loremflickr.com/800/600/TAG)` where `TAG` is a simple, accurate, lowercase keyword representing the subject (e.g., `skeleton`, `brain`, `cell`, `heart`, `castle`, `planet`, `map`, etc.).
+           - Example: `![Human Skeleton](https://loremflickr.com/800/600/skeleton)`
+           - If the topic is abstract, simple, or does not require a visual reference, do NOT include any image.
+        7. Keep it educational, engaging, and rich in depth. CRITICAL: Output ONLY the Markdown note itself. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the note', 'Pro tip:', 'Let me know', etc.).
+        8. CRITICAL MARKDOWN LIST FORMATTING: Never use asterisks (`*`) or plus signs (`+`) for markdown bullet lists/points. Always use a single hyphen followed by exactly one space.
+        9. CUSTOM MARKDOWN TABLE STYLING AND COLORING: Whenever generating tables, you MUST utilize the app's advanced metadata comment tag in the VERY FIRST cell.
     """
 
     private fun getReadableErrorMessage(e: Throwable): String {

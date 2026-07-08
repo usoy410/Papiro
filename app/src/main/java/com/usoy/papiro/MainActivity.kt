@@ -33,6 +33,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Initialize global Coil ImageLoader with SVG support and realistic User-Agent
+        val imageLoader = coil.ImageLoader.Builder(this)
+            .components {
+                add(coil.decode.SvgDecoder.Factory())
+            }
+            .okHttpClient {
+                okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .addInterceptor { chain ->
+                        val request = chain.request().newBuilder()
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
+                            .build()
+                        chain.proceed(request)
+                    }
+                    .build()
+            }
+            .build()
+        coil.Coil.setImageLoader(imageLoader)
+
         val database = NoteDatabase.getDatabase(this)
         val repository = NoteRepository(database.noteDao())
         val settingsStore = SettingsStore(this)

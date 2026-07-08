@@ -1457,8 +1457,39 @@ fun MarkdownRenderer(
 
 @Composable
 fun ImageView(block: MarkdownBlock.Image) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    var resolvedUrl by remember(block.path) { mutableStateOf<String?>(null) }
+    var isResolving by remember(block.path) { mutableStateOf(true) }
     var hasError by remember { mutableStateOf(false) }
     var showPreview by remember { mutableStateOf(false) }
+
+    LaunchedEffect(block.path) {
+        isResolving = true
+        hasError = false
+        try {
+            resolvedUrl = com.usoy.papiro.data.ImageSearchResolver.resolveImage(
+                context = context,
+                path = block.path,
+                altText = block.altText
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("ImageView", "Failed to resolve image path: ${block.path}", e)
+            resolvedUrl = block.path
+        } finally {
+            isResolving = false
+        }
+    }
+    
+    val imageRequest = remember(resolvedUrl) {
+        coil.request.ImageRequest.Builder(context)
+            .data(resolvedUrl ?: "")
+            .crossfade(true)
+            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+            .networkCachePolicy(coil.request.CachePolicy.ENABLED)
+            .build()
+    }
     
     if (showPreview) {
         Dialog(
@@ -1474,7 +1505,7 @@ fun ImageView(block: MarkdownBlock.Image) {
                         modifier = Modifier.fillMaxSize()
                     ) {
                         coil.compose.AsyncImage(
-                            model = block.path,
+                            model = imageRequest,
                             contentDescription = block.altText,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit
@@ -1524,7 +1555,25 @@ fun ImageView(block: MarkdownBlock.Image) {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            if (hasError) {
+            if (isResolving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Retrieving live web illustration...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else if (hasError) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1533,14 +1582,14 @@ fun ImageView(block: MarkdownBlock.Image) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Failed to load image from: ${block.path}",
+                        text = "Failed to load image from: ${resolvedUrl ?: block.path}",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             } else {
                 coil.compose.AsyncImage(
-                    model = block.path,
+                    model = imageRequest,
                     contentDescription = block.altText,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -4051,6 +4100,46 @@ private fun replaceFracs(input: String): String {
     return s
 }
 
+private fun splitMergedVariablesInWord(word: String): List<String> {
+    if (word.contains("_") || word.isEmpty()) {
+        return listOf(word)
+    }
+    
+    val reservedMathWords = setOf(
+        "ln", "log", "log10", "sin", "cos", "tan", "sqrt", "left", "right", "pi", "e",
+        "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", 
+        "kappa", "lambda", "mu", "nu", "xi", "omicron", "rho", "sigma", "tau", 
+        "upsilon", "phi", "chi", "psi", "omega",
+        "Alpha", "Beta", "Gamma", "Delta", "Theta", "Lambda", "Xi", "Pi", "Sigma", "Phi", "Psi", "Omega"
+    )
+    
+    val result = mutableListOf<String>()
+    var i = 0
+    while (i < word.length) {
+        var matchedReserved: String? = null
+        for (len in (word.length - i) downTo 2) {
+            val sub = word.substring(i, i + len)
+            if (sub in reservedMathWords) {
+                matchedReserved = sub
+                break
+            }
+        }
+        
+        if (matchedReserved != null) {
+            result.add(matchedReserved)
+            i += matchedReserved.length
+        } else {
+            result.add(word[i].toString())
+            i++
+        }
+    }
+    return result
+}
+
+private fun extractCandidateVariables(formula: String): List<String> {
+    return cleanLaTeXForEvaluation(formula).second.sorted()
+}
+
 private fun cleanLaTeXForEvaluation(latex: String): Pair<String, List<String>> {
     var rawExpr = latex.replace(Regex("\\\\begin\\{.*?\\}"), "")
                        .replace(Regex("\\\\end\\{.*?\\}"), "")
@@ -4078,6 +4167,19 @@ private fun cleanLaTeXForEvaluation(latex: String): Pair<String, List<String>> {
     expr = expr.replace("\\right]", " ] ")
     expr = expr.replace("\\cdot", " * ")
     expr = expr.replace("\\times", " * ")
+
+    // --- LATEX IMPLICIT MULTIPLICATION PREPROCESSOR ---
+    // 1) Closing brace '}' followed by letter, digit, '[', or '\'
+    expr = expr.replace(Regex("\\}(?=[A-Za-z0-9\\[\\\\])")) { "} * " }
+    // 2) A letter or digit followed by '[' (unless it is preceded by '\' like \left[)
+    expr = expr.replace(Regex("([A-Za-z0-9])(?=\\[)")) { "${it.groupValues[1]} * " }
+    // 3) A closing bracket ']' (not followed by underscore '_') followed by letter, digit, or '['
+    expr = expr.replace(Regex("\\](?=[A-Za-z0-9\\[])")) { "] * " }
+    // 4) A closing parenthesis ')' followed by letter, digit, '[', '(', or '\'
+    expr = expr.replace(Regex("\\)(?=[A-Za-z0-9\\(\\[\\\\])")) { ") * " }
+    // 5) A letter or digit followed by '('
+    expr = expr.replace(Regex("([A-Za-z0-9])(?=\\()")) { "${it.groupValues[1]} * " }
+    // --------------------------------------------------
     
     val textRegex = Regex("\\\\text\\{([^}]+)\\}")
     expr = textRegex.replace(expr) { "" }
@@ -4103,6 +4205,36 @@ private fun cleanLaTeXForEvaluation(latex: String): Pair<String, List<String>> {
     expr = expr.replace("{", " ( ")
     expr = expr.replace("}", " ) ")
     expr = expr.replace("\\", "")
+
+    // --- SMART VARIABLE AUTO-SPLITTER ---
+    val wordRegex = Regex("[A-Za-z_][A-Za-z0-9_]*")
+    expr = wordRegex.replace(expr) { matchResult ->
+        val word = matchResult.value
+        if (word.contains("_")) {
+            word
+        } else {
+            val splitParts = splitMergedVariablesInWord(word)
+            if (splitParts.size > 1) {
+                val joined = StringBuilder()
+                for (j in splitParts.indices) {
+                    val part = splitParts[j]
+                    joined.append(part)
+                    if (j < splitParts.size - 1) {
+                        val isFunc = part in setOf("sin", "cos", "tan", "ln", "log", "log10", "sqrt")
+                        if (isFunc) {
+                            joined.append(" ")
+                        } else {
+                            joined.append(" * ")
+                        }
+                    }
+                }
+                joined.toString()
+            } else {
+                word
+            }
+        }
+    }
+    // -------------------------------------
     
     val words = Regex("[A-Za-z_][A-Za-z0-9_]*").findAll(expr).map { it.value }.toSet()
     val nonVariables = setOf("ln", "log", "log10", "sin", "cos", "tan", "sqrt", "left", "right")
@@ -4243,6 +4375,12 @@ fun MathBlockView(
         map
     }
 
+    val activeVariables = remember(variables) {
+        val list = mutableStateListOf<String>()
+        list.addAll(variables)
+        list
+    }
+
     val outputVariableName = remember(block.equation) {
         val parts = block.equation.split("=")
         if (parts.size > 1) {
@@ -4309,7 +4447,7 @@ fun MathBlockView(
                                 contentDescription = if (isEditing) "Done" else "Edit Formula",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
-                            )
+                              )
                         }
                     }
                 }
@@ -4404,7 +4542,7 @@ fun MathBlockView(
                     modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
                 )
 
-                if (variables.isEmpty()) {
+                if (activeVariables.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -4443,28 +4581,65 @@ fun MathBlockView(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        variables.forEach { v ->
+                        activeVariables.toList().forEach { v ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = v,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                IconButton(
+                                    onClick = {
+                                        activeVariables.remove(v)
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete variable",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                var varNameInput by remember(v) { mutableStateOf(v) }
+                                OutlinedTextField(
+                                    value = varNameInput,
+                                    onValueChange = { newVal ->
+                                        val cleanedName = newVal.filter { it.isLetterOrDigit() || it == '_' }
+                                        varNameInput = cleanedName
+                                        if (cleanedName.isNotEmpty() && cleanedName != v) {
+                                            val idx = activeVariables.indexOf(v)
+                                            if (idx != -1) {
+                                                activeVariables[idx] = cleanedName
+                                                val valCopy = defaultVariableValues[v] ?: "1.0"
+                                                defaultVariableValues.remove(v)
+                                                defaultVariableValues[cleanedName] = valCopy
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.width(90.dp),
+                                    textStyle = TextStyle(
                                         fontFamily = FontFamily.Serif,
                                         fontStyle = FontStyle.Italic,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.secondary
                                     ),
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.weight(1f)
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                    )
                                 )
+
+                                Spacer(modifier = Modifier.weight(1f))
+
                                 OutlinedTextField(
                                     value = defaultVariableValues[v] ?: "",
                                     onValueChange = { newValue ->
                                         defaultVariableValues[v] = newValue
                                     },
-                                    modifier = Modifier.width(180.dp),
+                                    modifier = Modifier.width(160.dp),
                                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
@@ -4477,12 +4652,104 @@ fun MathBlockView(
                         }
                     }
 
+                    var newVarName by remember { mutableStateOf("") }
+                    var showCandidatesDropdown by remember { mutableStateOf(false) }
+                    val candidates = remember(block.equation, activeVariables.toList()) {
+                        extractCandidateVariables(block.equation).filter { it !in activeVariables }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(modifier = Modifier.weight(1.5f)) {
+                            OutlinedTextField(
+                                value = newVarName,
+                                onValueChange = { newVarName = it.filter { c -> c.isLetterOrDigit() || c == '_' } },
+                                label = { Text("New variable") },
+                                placeholder = { Text("e.g. M") },
+                                textStyle = TextStyle(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                trailingIcon = {
+                                    if (candidates.isNotEmpty()) {
+                                        IconButton(onClick = { showCandidatesDropdown = !showCandidatesDropdown }) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowDropDown,
+                                                contentDescription = "Detected variables dropdown"
+                                            )
+                                        }
+                                    }
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                )
+                            )
+
+                            if (candidates.isNotEmpty()) {
+                                DropdownMenu(
+                                    expanded = showCandidatesDropdown,
+                                    onDismissRequest = { showCandidatesDropdown = false }
+                                ) {
+                                    Text(
+                                        text = "Formula variables:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    candidates.forEach { candidate ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = candidate,
+                                                    style = TextStyle(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold)
+                                                )
+                                            },
+                                            onClick = {
+                                                newVarName = candidate
+                                                showCandidatesDropdown = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if (newVarName.isNotEmpty() && newVarName !in activeVariables) {
+                                    activeVariables.add(newVarName)
+                                    if (!defaultVariableValues.containsKey(newVarName)) {
+                                        defaultVariableValues[newVarName] = "1.0"
+                                    }
+                                    newVarName = ""
+                                }
+                            },
+                            enabled = newVarName.isNotEmpty(),
+                            modifier = Modifier.height(56.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add")
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
                         onClick = {
                             try {
-                                val valueMap = defaultVariableValues.mapValues { (_, v) -> v.toDoubleOrNull() ?: 0.0 }
+                                val valueMap = activeVariables.associateWith { v ->
+                                    defaultVariableValues[v]?.toDoubleOrNull() ?: 1.0
+                                }
                                 val evaluator = MathEvaluator(cleanedExpr, valueMap)
                                 val res = evaluator.parse()
                                 if (res.isNaN() || res.isInfinite()) {
