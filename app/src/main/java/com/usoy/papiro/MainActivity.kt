@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import com.usoy.papiro.data.NoteDatabase
 import com.usoy.papiro.data.NoteRepository
 import com.usoy.papiro.data.SettingsStore
+import com.usoy.papiro.data.ImageSearchResolver
 import com.usoy.papiro.ui.screens.NoteEditorScreen
 import com.usoy.papiro.ui.screens.NoteListScreen
 import com.usoy.papiro.ui.screens.SettingsScreen
@@ -52,6 +53,9 @@ class MainActivity : ComponentActivity() {
             }
             .build()
         coil.Coil.setImageLoader(imageLoader)
+
+        // Warm up the Render-hosted image search backend on app launch
+        ImageSearchResolver.warmup()
 
         val database = NoteDatabase.getDatabase(this)
         val repository = NoteRepository(database.noteDao())

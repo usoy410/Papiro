@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.usoy.papiro.data.NoteEntity
+import com.usoy.papiro.data.ImageSearchResolver
 import com.usoy.papiro.viewmodel.NoteViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -115,6 +116,7 @@ fun NoteListScreen(
                                 FloatingActionButton(
                                     onClick = {
                                         isFabExpanded = false
+                                        ImageSearchResolver.warmup()
                                         onUploadDocumentClick("Note")
                                     },
                                     modifier = Modifier.size(48.dp),
@@ -141,6 +143,7 @@ fun NoteListScreen(
                                 FloatingActionButton(
                                     onClick = {
                                         isFabExpanded = false
+                                        ImageSearchResolver.warmup()
                                         viewModel.createNewNote { insertedNote ->
                                             onNoteSelected(insertedNote)
                                         }
@@ -158,6 +161,9 @@ fun NoteListScreen(
                     FloatingActionButton(
                         onClick = {
                             isFabExpanded = !isFabExpanded
+                            if (isFabExpanded) {
+                                ImageSearchResolver.warmup()
+                            }
                         },
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,

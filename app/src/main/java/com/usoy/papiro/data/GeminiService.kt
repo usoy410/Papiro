@@ -46,15 +46,21 @@ object GeminiService {
            - IMPORTANT: ALWAYS enclose node text with parenthesis or special characters inside double quotes (e.g., `A["Text (with parens)"]`) to prevent Mermaid parse errors.
            - If a diagram is not highly relevant or feels forced, do NOT generate one. Keep simple topics simple.
         6. Web Images & Real-world Illustrations (OPTIONAL & ONLY WHEN TRULY BENEFICIAL):
-           - ONLY if the topic is highly visual (e.g., human anatomy, biology/cells, famous historical landmarks, planetary/astronomical systems, physical machinery, or geographical maps) and would benefit immensely from a real-world picture or scientific illustration, you may include standard markdown image links.
-           - CRITICAL RULE TO PREVENT 404 ERRORS: Do NOT try to guess or hallucinate specific Unsplash photo IDs (e.g., `images.unsplash.com/photo-1234...`) or Wikimedia Commons paths, as they are guaranteed to result in 404 Not Found errors.
-           - Instead, ALWAYS use LoremFlickr, which is a stable, public, keyword-based image routing service that returns real, high-quality, live images matching your specified tag.
-           - Format: `![Descriptive Image Title](https://loremflickr.com/800/600/TAG)` where `TAG` is a simple, accurate, lowercase keyword representing the subject (e.g., `skeleton`, `brain`, `cell`, `heart`, `castle`, `planet`, `map`, etc.).
-           - Example: `![Human Skeleton](https://loremflickr.com/800/600/skeleton)`
-           - If the topic is abstract, simple, or does not require a visual reference, do NOT include any image.
+           - ONLY if the topic is highly visual and would benefit from an illustration, photo, or labeled diagram, you may include standard markdown image links.
+           - Instead of providing real URLs (which break), you MUST use a simple keyword as the URL path: `![descriptive alt text](keyword)` (e.g., `![anatomy of human heart](heart)`). The app will automatically resolve this into a high-quality image.
+           - **Smart Image Context**: The app decides whether to fetch a "labeled diagram" or a "standard image" based on your keyword.
+             - If you want a **labeled diagram, schematic, map, or educational chart**, ensure your keyword includes terms like 'diagram', 'anatomy', 'labeled', 'chart', or 'schematic' (e.g., `![cell structure](cell diagram)`).
+             - If you want a **standard photo, picture, or general image** (unlabeled), ensure your keyword is purely descriptive and avoids educational/diagram terms (e.g., `![students in school](school with children)`).
         7. Keep it educational, engaging, and rich in depth. CRITICAL: Output ONLY the Markdown note itself. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the note', 'Pro tip:', 'Let me know', etc.).
         8. CRITICAL MARKDOWN LIST FORMATTING: Never use asterisks (`*`) or plus signs (`+`) for markdown bullet lists/points. Always use a single hyphen followed by exactly one space.
         9. CUSTOM MARKDOWN TABLE STYLING AND COLORING: Whenever generating tables, you MUST utilize the app's advanced metadata comment tag in the VERY FIRST cell.
+           - Syntax: `| <!-- T:Type|C:Color --> Header | ... |`
+           - Supported Types (`T:`): `default`, `striped`, `bordered`, `clean`
+           - Supported Colors (`C:`): `primary`, `secondary`, `tertiary`, `surface`, `error`
+           - Example for a stripped primary table:
+           | <!-- T:striped|C:primary --> Element | Symbol | Atomic Number |
+           |---|---|---|
+           | Hydrogen | H | 1 |
     """
 
     private fun getReadableErrorMessage(e: Throwable): String {
@@ -219,13 +225,20 @@ object GeminiService {
         val model = "gemini-3.1-flash-lite"
 
          val systemInstruction = """
-            You are an expert AI note assistant and enhancer.
-            Your task is to analyze and enhance the note content.
-            IMPORTANT: Output ONLY the enhanced content. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is the enhanced note', 'Pro tip:', 'Let me know', etc.).
+            You are a powerful AI note assistant.
+            You have a dual purpose based on the user's input:
+            1. If the input is standard text or notes, fix grammar, format it, and enhance the content into professional markdown.
+            2. If the input contains a request or instruction (e.g., "make me a diagram of...", "search an image of...", "write code for...", "give me a function..."), DO EXACTLY WHAT THE USER ASKS. Fulfill the instruction directly as the new content.
+               - For generating images/diagrams, use markdown image syntax: `![description](keyword)` (e.g. `![Anatomy of heart](heart)`).
+               - **Smart Image Context**: The app decides whether to fetch a "labeled diagram" or a "standard image" based on your keyword.
+                 - If the user asks for a **labeled diagram, schematic, map, or educational chart**, ensure your keyword includes terms like 'diagram', 'anatomy', 'labeled', 'chart', or 'schematic' (e.g. `![heart diagram](heart diagram)`).
+                 - If the user asks for a **standard photo, picture, or general image** (unlabeled), ensure your keyword is purely descriptive and avoids educational/diagram terms (e.g. `![a school with children](school with children)`).
+            
+            IMPORTANT: Output ONLY the result. Do NOT include ANY conversational filler, introductory text, or ending remarks (like 'Here is your code', 'Here is the diagram', etc.).
         """.trimIndent()
 
         val request = GenerateContentRequest(
-            contents = listOf(Content(parts = listOf(Part(text = "Please enhance this note content:\n\n$noteContent")))),
+            contents = listOf(Content(parts = listOf(Part(text = "Here is the input to process:\n\n$noteContent")))),
             systemInstruction = Content(parts = listOf(Part(text = systemInstruction)))
         )
 

@@ -1000,10 +1000,10 @@ private fun startTemporaryTextCycle(
     )
     val tips = listOf(
         "💡 Pro-Tip: You can maximize any diagram to full screen with the zoom icon in the corner!",
-        "💡 Pro-Tip: Use `[Node A] -> [Node B]` to quickly build automatic flowcharts.",
+        "💡 Pro-Tip: Type 'make me a diagram of...' or 'give me the code for...' then click the magic wand to generate it instantly!",
+        "💡 Pro-Tip: Need an image? Type 'search an image of a cat', select it, and hit the magic wand button!",
         "💡 Pro-Tip: Papiro saves everything offline automatically as you type.",
-        "💡 Pro-Tip: Want a quiz? Use the Quiz Generator button to challenge yourself!",
-        "💡 Pro-Tip: You can drag and drop sections easily in Papiro."
+        "💡 Pro-Tip: Want a quiz? Use the Quiz Generator button to challenge yourself!"
     )
 
     return scope.launch {
